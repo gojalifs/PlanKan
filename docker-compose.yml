@@ -1,0 +1,36 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_APP_URL=https://budget.twogether.click
+    container_name: plankan-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - BETTER_AUTH_URL=https://budget.twogether.click
+      - NEXT_PUBLIC_APP_URL=https://budget.twogether.click
+      # In docker network sjo_default, postgres is accessible at postgres:5432 or sjo-postgres-1:5432
+      - DATABASE_URL=postgresql://sjo-user:11e89474f8d6b07ddd2889a67fed8c9f@postgres:5432/plankan
+    networks:
+      - proxy
+      - sjo_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.plankan.entrypoints=websecure"
+      - "traefik.http.routers.plankan.rule=Host(`budget.twogether.click`)"
+      - "traefik.http.routers.plankan.tls=true"
+      - "traefik.http.routers.plankan.tls.certresolver=letsencrypt"
+      - "traefik.http.services.plankan.loadbalancer.server.port=3000"
+
+networks:
+  proxy:
+    external: true
+  sjo_default:
+    external: true
