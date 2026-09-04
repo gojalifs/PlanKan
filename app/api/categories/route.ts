@@ -7,6 +7,7 @@ import { z } from "zod";
 const createCategorySchema = z.object({
   name: z.string().min(1, "Nama kategori wajib diisi"),
   type: z.enum(["INCOME", "EXPENSE"]).default("EXPENSE"),
+  parentId: z.string().nullable().optional(),
   icon: z.string().default("Tag"),
   color: z.string().default("#64748b"),
 });
@@ -22,16 +23,25 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
+    const parentOnly = searchParams.get("parentOnly") === "true";
 
     const categories = await prisma.category.findMany({
       where: {
         userId: session.user.id,
         ...(type ? { type: type as any } : {}),
+        ...(parentOnly ? { parentId: null } : {}),
       },
-      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+      orderBy: [{ parentId: "asc" }, { isDefault: "desc" }, { name: "asc" }],
       include: {
+        parent: {
+          select: { id: true, name: true, color: true, icon: true },
+        },
+        children: {
+          select: { id: true, name: true, color: true, icon: true, type: true },
+          orderBy: { name: "asc" },
+        },
         _count: {
-          select: { transactions: true },
+          select: { transactions: true, children: true },
         },
       },
     });
@@ -53,14 +63,32 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validated = createCategorySchema.parse(body);
 
+    let parentId = validated.parentId || null;
+
+    if (parentId) {
+      const parentCat = await prisma.category.findFirst({
+        where: { id: parentId, userId: session.user.id },
+      });
+      if (!parentCat) {
+        return NextResponse.json({ error: "Parent kategori tidak valid" }, { status: 400 });
+      }
+      if (parentCat.type !== validated.type) {
+        return NextResponse.json({ error: "Tipe kategori harus sama dengan induknya" }, { status: 400 });
+      }
+    }
+
     const category = await prisma.category.create({
       data: {
         userId: session.user.id,
+        parentId,
         name: validated.name,
         type: validated.type,
         icon: validated.icon,
         color: validated.color,
         isDefault: false,
+      },
+      include: {
+        parent: true,
       },
     });
 

@@ -19,11 +19,13 @@ import {
   LayoutDashboard,
   ArrowLeftRight,
   Tags,
+  Target,
   PlusCircle,
   LogOut,
   User,
   Menu,
   X,
+  BarChart3,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
@@ -38,6 +40,8 @@ export function Navbar() {
   const navItems = [
     { label: "Dashboard", href: "/", icon: LayoutDashboard },
     { label: "Transaksi", href: "/transactions", icon: ArrowLeftRight },
+    { label: "Budget", href: "/budgets", icon: Target },
+    { label: "Laporan", href: "/reports", icon: BarChart3 },
     { label: "Dompet", href: "/wallets", icon: Wallet },
     { label: "Kategori", href: "/categories", icon: Tags },
   ];
@@ -145,6 +149,12 @@ export function Navbar() {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/budgets" className="cursor-pointer">
+                        <Target className="mr-2 h-4 w-4" />
+                        Anggaran (Budget)
+                      </Link>
+                    </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/wallets" className="cursor-pointer">
                         <Wallet className="mr-2 h-4 w-4" />

@@ -36,7 +36,11 @@ export async function GET() {
         },
       },
       include: {
-        category: true,
+        category: {
+          include: {
+            parent: true,
+          },
+        },
       },
     });
 
@@ -50,8 +54,10 @@ export async function GET() {
         monthlyIncome += amt;
       } else if (t.type === "EXPENSE") {
         monthlyExpense += amt;
-        const catName = t.category?.name || "Tanpa Kategori";
-        const catColor = t.category?.color || "#94a3b8";
+        // Aggregate sub-categories under their Parent Category on Dashboard
+        const parentCategory = t.category?.parent || t.category;
+        const catName = parentCategory?.name || "Tanpa Kategori";
+        const catColor = parentCategory?.color || "#94a3b8";
         if (!categoryExpenseMap[catName]) {
           categoryExpenseMap[catName] = { name: catName, color: catColor, amount: 0 };
         }
@@ -67,7 +73,11 @@ export async function GET() {
       include: {
         wallet: true,
         destinationWallet: true,
-        category: true,
+        category: {
+          include: {
+            parent: true,
+          },
+        },
       },
     });
 

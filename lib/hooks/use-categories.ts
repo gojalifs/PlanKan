@@ -6,6 +6,7 @@ import { toast } from "sonner";
 export interface Category {
   id: string;
   userId: string | null;
+  parentId: string | null;
   name: string;
   type: "INCOME" | "EXPENSE";
   icon: string;
@@ -13,19 +14,34 @@ export interface Category {
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
+  parent?: {
+    id: string;
+    name: string;
+    color: string;
+    icon: string;
+  } | null;
+  children?: Array<{
+    id: string;
+    name: string;
+    color: string;
+    icon: string;
+    type: "INCOME" | "EXPENSE";
+  }>;
   _count?: {
     transactions: number;
+    children: number;
   };
 }
 
-export function useCategories(type?: "INCOME" | "EXPENSE") {
+export function useCategories(type?: "INCOME" | "EXPENSE", parentOnly?: boolean) {
   const queryClient = useQueryClient();
 
   const query = useQuery<{ categories: Category[] }>({
-    queryKey: ["categories", { type }],
+    queryKey: ["categories", { type, parentOnly }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (type) params.set("type", type);
+      if (parentOnly) params.set("parentOnly", "true");
       const res = await fetch(`/api/categories?${params.toString()}`);
       if (!res.ok) throw new Error("Gagal memuat daftar kategori");
       return res.json();
@@ -36,6 +52,7 @@ export function useCategories(type?: "INCOME" | "EXPENSE") {
     mutationFn: async (data: {
       name: string;
       type: "INCOME" | "EXPENSE";
+      parentId?: string | null;
       icon?: string;
       color?: string;
     }) => {
@@ -50,6 +67,7 @@ export function useCategories(type?: "INCOME" | "EXPENSE") {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
       toast.success("Kategori berhasil ditambahkan!");
     },
     onError: (err: any) => {
@@ -65,6 +83,7 @@ export function useCategories(type?: "INCOME" | "EXPENSE") {
       id: string;
       name?: string;
       type?: "INCOME" | "EXPENSE";
+      parentId?: string | null;
       icon?: string;
       color?: string;
     }) => {
@@ -79,6 +98,8 @@ export function useCategories(type?: "INCOME" | "EXPENSE") {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["summary"] });
       toast.success("Kategori berhasil diperbarui!");
     },
     onError: (err: any) => {
@@ -97,6 +118,8 @@ export function useCategories(type?: "INCOME" | "EXPENSE") {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["summary"] });
       toast.success("Kategori berhasil dihapus!");
     },
     onError: (err: any) => {

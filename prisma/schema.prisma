@@ -21,11 +21,14 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  sessions      Session[]
-  accounts      Account[]
-  wallets       Wallet[]
-  categories    Category[]
-  transactions  Transaction[]
+  sessions             Session[]
+  accounts             Account[]
+  wallets              Wallet[]
+  categories           Category[]
+  transactions         Transaction[]
+  budgets              Budget[]
+  budgetPeriodSetting  BudgetPeriodSetting?
+  budgetPeriodOverrides BudgetPeriodOverride[]
 
   @@map("user")
 }
@@ -117,6 +120,7 @@ enum TransactionType {
 model Category {
   id          String          @id @default(cuid())
   userId      String?
+  parentId    String?
   name        String
   type        TransactionType @default(EXPENSE)
   icon        String          @default("Tag")
@@ -126,9 +130,13 @@ model Category {
   updatedAt   DateTime        @updatedAt
 
   user        User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent      Category?       @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Category[]      @relation("CategoryHierarchy")
   transactions Transaction[]
+  budgets     Budget[]
 
   @@index([userId])
+  @@index([parentId])
   @@map("category")
 }
 
@@ -142,6 +150,7 @@ model Transaction {
   amount              Decimal         @db.Decimal(15, 2)
   date                DateTime        @default(now())
   note                String?         @db.Text
+  attachmentUrl       String?         @db.Text
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
@@ -156,3 +165,58 @@ model Transaction {
   @@map("transaction")
 }
 
+model Budget {
+  id          String    @id @default(cuid())
+  userId      String
+  categoryId  String
+  amount      Decimal   @db.Decimal(15, 2)
+  period      String    @default("MONTHLY")
+  month       Int?      // 1-12 (optional, if null applies to recurring monthly)
+  year        Int?      // e.g. 2026 (optional)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@index([userId])
+  @@map("budget")
+}
+
+// ── Budget Period Setting ─────────────────────────────────────────────────────
+// Global default for how a user's budget month starts.
+// LAST_WORKING_DAY: start on the last Mon-Fri of the PREVIOUS calendar month.
+// FIXED_DAY: start on a specific day-of-month (1–28) every month.
+model BudgetPeriodSetting {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  method    String   @default("LAST_WORKING_DAY") // "LAST_WORKING_DAY" | "FIXED_DAY"
+  fixedDay  Int?     // 1-28, used when method = "FIXED_DAY"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("budget_period_setting")
+}
+
+// ── Budget Period Override ────────────────────────────────────────────────────
+// Per-month override: force a specific start day for the budget period of
+// a given (month, year). E.g. override June 2026 to start on day 28 (May 28).
+model BudgetPeriodOverride {
+  id        String   @id @default(cuid())
+  userId    String
+  month     Int      // budget month: 1–12
+  year      Int      // budget year
+  startDay  Int      // day-of-month when this budget month STARTS (in the prev calendar month)
+  // startMonth is derived: always (month - 1), wrapping to Dec of (year - 1) if month = 1
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month, year])
+  @@index([userId])
+  @@map("budget_period_override")
+}

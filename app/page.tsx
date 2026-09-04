@@ -23,10 +23,10 @@ import {
   Zap,
   Sparkles,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -36,7 +36,7 @@ const containerVariants = {
   },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 15 },
   visible: {
     opacity: 1,
@@ -374,9 +374,14 @@ export default function HomePage() {
           <Card className="border-border shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-base font-semibold">Pengeluaran per Kategori</CardTitle>
-              <Button variant="ghost" size="sm" asChild className="text-xs text-primary">
-                <Link href="/categories">Kategori</Link>
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" asChild className="text-xs text-primary h-7 px-2">
+                  <Link href="/budgets">Budget</Link>
+                </Button>
+                <Button variant="ghost" size="sm" asChild className="text-xs text-muted-foreground hover:text-foreground h-7 px-2">
+                  <Link href="/categories">Kategori</Link>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {categoryExpenses.length === 0 ? (
@@ -483,6 +488,8 @@ export default function HomePage() {
                             <p className="text-sm font-medium leading-none">
                               {isTransfer
                                 ? `Transfer: ${tx.wallet?.name} ➔ ${tx.destinationWallet?.name}`
+                                : tx.category?.parent
+                                ? `${tx.category.parent.name} ➔ ${tx.category.name}`
                                 : tx.category?.name || "Tanpa Kategori"}
                             </p>
                             <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">

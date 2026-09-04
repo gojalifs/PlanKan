@@ -1,5 +1,5 @@
 services:
-  app:
+  plankan_app:
     build:
       context: .
       dockerfile: Dockerfile
@@ -19,7 +19,7 @@ services:
       - DATABASE_URL=postgresql://sjo-user:11e89474f8d6b07ddd2889a67fed8c9f@postgres:5432/plankan
     networks:
       - proxy
-      - sjo_default
+#      - sjo_default
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
@@ -28,9 +28,27 @@ services:
       - "traefik.http.routers.plankan.tls=true"
       - "traefik.http.routers.plankan.tls.certresolver=letsencrypt"
       - "traefik.http.services.plankan.loadbalancer.server.port=3000"
+  
+  minio:
+    image: minio/minio:latest
+    container_name: plankan-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    command: server /data --console-address ":9001"
+#    ports:
+#      - "9000:9000"
+#      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - proxy
+#      - sjo_default
+
 
 networks:
   proxy:
     external: true
-  sjo_default:
+volumes:
+  minio-data:
     external: true

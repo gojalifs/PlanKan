@@ -6,6 +6,7 @@ import { z } from "zod";
 const updateCategorySchema = z.object({
   name: z.string().min(1).optional(),
   type: z.enum(["INCOME", "EXPENSE"]).optional(),
+  parentId: z.string().nullable().optional(),
   icon: z.string().optional(),
   color: z.string().optional(),
 });
@@ -32,9 +33,31 @@ export async function PUT(
       return NextResponse.json({ error: "Kategori tidak ditemukan" }, { status: 404 });
     }
 
+    if (validated.parentId !== undefined) {
+      if (validated.parentId === id) {
+        return NextResponse.json(
+          { error: "Kategori tidak dapat menjadi sub-kategori dari dirinya sendiri" },
+          { status: 400 }
+        );
+      }
+
+      if (validated.parentId) {
+        const parentCat = await prisma.category.findFirst({
+          where: { id: validated.parentId, userId: session.user.id },
+        });
+        if (!parentCat) {
+          return NextResponse.json({ error: "Parent kategori tidak ditemukan" }, { status: 400 });
+        }
+      }
+    }
+
     const updated = await prisma.category.update({
       where: { id },
       data: validated,
+      include: {
+        parent: true,
+        children: true,
+      },
     });
 
     return NextResponse.json({ category: updated });

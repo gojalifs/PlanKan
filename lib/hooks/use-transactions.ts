@@ -14,7 +14,8 @@ export interface Transaction {
   type: "INCOME" | "EXPENSE" | "TRANSFER";
   amount: number | string;
   date: string;
-  note: string | null;
+  attachmentUrl?: string | null;
+  note?: string | null;
   createdAt: string;
   updatedAt: string;
   wallet?: Wallet;
@@ -67,14 +68,35 @@ export function useTransactions(filters?: TransactionFilters) {
       amount: number;
       date?: string;
       note?: string | null;
+      attachmentFile?: File | null;
     }) => {
-      const res = await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      // If there is a file, use multipart/form-data
+      if (data.attachmentFile) {
+        const formData = new FormData();
+        formData.append('walletId', data.walletId);
+        if (data.destinationWalletId) formData.append('destinationWalletId', data.destinationWalletId);
+        if (data.categoryId) formData.append('categoryId', data.categoryId);
+        formData.append('type', data.type);
+        formData.append('amount', data.amount.toString());
+        if (data.date) formData.append('date', data.date);
+        if (data.note) formData.append('note', data.note);
+        formData.append('attachment', data.attachmentFile);
+        const res = await fetch('/api/transactions', {
+          method: 'POST',
+          body: formData,
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Gagal mencatat transaksi');
+        return result.transaction;
+      }
+      // Fallback to JSON body
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Gagal mencatat transaksi");
+      if (!res.ok) throw new Error(result.error || 'Gagal mencatat transaksi');
       return result.transaction;
     },
     onSuccess: () => {

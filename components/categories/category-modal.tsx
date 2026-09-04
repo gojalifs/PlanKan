@@ -19,13 +19,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCategories, Category } from "@/lib/hooks/use-categories";
-import { Loader2 } from "lucide-react";
+import { Loader2, FolderTree, Tag } from "lucide-react";
 
 interface CategoryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categoryToEdit?: Category | null;
   defaultType?: "EXPENSE" | "INCOME";
+  defaultParentId?: string | null;
 }
 
 const CATEGORY_COLORS = [
@@ -48,28 +49,63 @@ export function CategoryModal({
   onOpenChange,
   categoryToEdit,
   defaultType = "EXPENSE",
+  defaultParentId = null,
 }: CategoryModalProps) {
-  const { createCategory, updateCategory, isCreating, isUpdating } = useCategories();
+  const { categories, createCategory, updateCategory, isCreating, isUpdating } = useCategories(undefined, true);
 
   const [name, setName] = useState("");
   const [type, setType] = useState<"EXPENSE" | "INCOME">(defaultType);
+  const [isSubCategory, setIsSubCategory] = useState<boolean>(Boolean(defaultParentId));
+  const [parentId, setParentId] = useState<string>(defaultParentId || "NONE");
   const [color, setColor] = useState<string>("#f43f5e");
+
+  // Filter available parent categories for this type (exclude self if editing)
+  const availableParents = categories.filter(
+    (c) => c.type === type && (!categoryToEdit || c.id !== categoryToEdit.id)
+  );
 
   useEffect(() => {
     if (categoryToEdit) {
       setName(categoryToEdit.name);
       setType(categoryToEdit.type);
       setColor(categoryToEdit.color);
+      if (categoryToEdit.parentId) {
+        setIsSubCategory(true);
+        setParentId(categoryToEdit.parentId);
+      } else {
+        setIsSubCategory(false);
+        setParentId("NONE");
+      }
     } else {
       setName("");
       setType(defaultType);
       setColor(defaultType === "EXPENSE" ? "#f43f5e" : "#10b981");
+      if (defaultParentId) {
+        setIsSubCategory(true);
+        setParentId(defaultParentId);
+      } else {
+        setIsSubCategory(false);
+        setParentId("NONE");
+      }
     }
-  }, [categoryToEdit, open, defaultType]);
+  }, [categoryToEdit, open, defaultType, defaultParentId]);
+
+  // When selecting a parent, match color if not manually changed
+  const handleParentSelect = (val: string) => {
+    setParentId(val);
+    if (val !== "NONE") {
+      const parent = availableParents.find((p) => p.id === val);
+      if (parent) {
+        setColor(parent.color);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    const actualParentId = isSubCategory && parentId !== "NONE" ? parentId : null;
 
     try {
       if (categoryToEdit) {
@@ -77,12 +113,14 @@ export function CategoryModal({
           id: categoryToEdit.id,
           name: name.trim(),
           type,
+          parentId: actualParentId,
           color,
         });
       } else {
         await createCategory({
           name: name.trim(),
           type,
+          parentId: actualParentId,
           color,
         });
       }
@@ -96,32 +134,37 @@ export function CategoryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px]">
+      <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">
-            {categoryToEdit ? "Edit Kategori" : "Tambah Kategori Baru"}
-          </DialogTitle>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <FolderTree className="h-4 w-4" />
+            </div>
+            <DialogTitle className="text-xl font-bold">
+              {categoryToEdit
+                ? categoryToEdit.parentId
+                  ? "Edit Sub-Kategori"
+                  : "Edit Kategori Utama"
+                : isSubCategory
+                ? "Tambah Sub-Kategori"
+                : "Tambah Kategori Baru"}
+            </DialogTitle>
+          </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          {/* Name */}
+          {/* Transaction Type */}
           <div className="space-y-1.5">
-            <Label htmlFor="category-name">Nama Kategori</Label>
-            <Input
-              id="category-name"
-              placeholder="Contoh: Kopi & Nongkrong, Langganan Streaming"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-
-          {/* Type */}
-          <div className="space-y-1.5">
-            <Label>Tipe Transaksi</Label>
-            <Select value={type} onValueChange={(val) => setType(val as any)}>
-              <SelectTrigger>
+            <Label className="text-xs">Tipe Transaksi</Label>
+            <Select
+              value={type}
+              onValueChange={(val) => {
+                setType(val as any);
+                setParentId("NONE");
+              }}
+              disabled={Boolean(categoryToEdit)}
+            >
+              <SelectTrigger className="h-9">
                 <SelectValue placeholder="Pilih tipe" />
               </SelectTrigger>
               <SelectContent>
@@ -131,16 +174,88 @@ export function CategoryModal({
             </Select>
           </div>
 
-          {/* Color */}
+          {/* Sub-Category Toggle */}
+          <div className="space-y-2 rounded-xl border border-border/80 bg-muted/20 p-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="is-sub-toggle" className="text-xs font-semibold cursor-pointer">
+                Jadikan sebagai Sub-Kategori
+              </Label>
+              <input
+                type="checkbox"
+                id="is-sub-toggle"
+                checked={isSubCategory}
+                onChange={(e) => {
+                  setIsSubCategory(e.target.checked);
+                  if (!e.target.checked) setParentId("NONE");
+                  else if (availableParents.length > 0 && parentId === "NONE") {
+                    setParentId(availableParents[0].id);
+                  }
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+            </div>
+
+            {isSubCategory && (
+              <div className="space-y-1.5 pt-1.5 border-t border-border/60">
+                <Label className="text-xs text-muted-foreground">Pilih Kategori Induk (Parent)</Label>
+                {availableParents.length === 0 ? (
+                  <p className="text-xs text-rose-500">
+                    Belum ada kategori utama. Buat kategori utama terlebih dahulu.
+                  </p>
+                ) : (
+                  <Select value={parentId} onValueChange={handleParentSelect}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Pilih Kategori Induk" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableParents.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full"
+                              style={{ backgroundColor: p.color }}
+                            />
+                            {p.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Name */}
           <div className="space-y-1.5">
-            <Label>Warna Badge</Label>
+            <Label htmlFor="category-name" className="text-xs">
+              {isSubCategory ? "Nama Sub-Kategori" : "Nama Kategori Utama"}
+            </Label>
+            <Input
+              id="category-name"
+              placeholder={
+                isSubCategory
+                  ? "Contoh: Kopi & Nongkrong, Bensin, Restoran"
+                  : "Contoh: Makanan & Minuman, Transportasi, Belanja"
+              }
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoFocus
+              className="h-9"
+            />
+          </div>
+
+          {/* Color Selection */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Warna Badge</Label>
             <div className="flex flex-wrap gap-2 pt-1">
               {CATEGORY_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
-                  className={`h-7 w-7 rounded-full transition-transform ${
+                  className={`h-6 w-6 rounded-full transition-transform ${
                     color === c ? "scale-125 ring-2 ring-primary ring-offset-2" : "hover:scale-110"
                   }`}
                   style={{ backgroundColor: c }}

@@ -39,8 +39,18 @@ export async function GET(request: Request) {
       ];
     }
 
-    if (categoryId) {
-      whereClause.categoryId = categoryId;
+    if (categoryId && categoryId !== "ALL") {
+      const subCats = await prisma.category.findMany({
+        where: { parentId: categoryId, userId: session.user.id },
+        select: { id: true },
+      });
+      if (subCats.length > 0) {
+        whereClause.categoryId = {
+          in: [categoryId, ...subCats.map((s) => s.id)],
+        };
+      } else {
+        whereClause.categoryId = categoryId;
+      }
     }
 
     if (type && ["INCOME", "EXPENSE", "TRANSFER"].includes(type)) {
@@ -66,7 +76,11 @@ export async function GET(request: Request) {
       include: {
         wallet: true,
         destinationWallet: true,
-        category: true,
+        category: {
+          include: {
+            parent: true,
+          },
+        },
       },
     });
 
@@ -105,13 +119,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const validated = createTransactionSchema.parse(body);
+    // Detect multipart/form-data for file uploads
+    const contentType = request.headers.get('content-type') || '';
+    let data: any = {};
+    let attachmentFile: File | null = null;
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      data.walletId = formData.get('walletId')?.toString() || '';
+      data.destinationWalletId = formData.get('destinationWalletId')?.toString() || null;
+      data.categoryId = formData.get('categoryId')?.toString() || null;
+      data.type = formData.get('type')?.toString();
+      data.amount = parseFloat(formData.get('amount')?.toString() || '0');
+      data.date = formData.get('date')?.toString() || undefined;
+      data.note = formData.get('note')?.toString() || null;
+      const file = formData.get('attachment');
+      if (file && file instanceof File) {
+        attachmentFile = file;
+      }
+    } else {
+      const body = await request.json();
+      data = body;
+    }
+
+    const validated = createTransactionSchema.parse(data);
 
     const sourceWallet = await prisma.wallet.findFirst({
       where: { id: validated.walletId, userId: session.user.id },
     });
-
     if (!sourceWallet) {
       return NextResponse.json({ error: "Dompet asal tidak valid" }, { status: 400 });
     }
@@ -131,6 +166,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // Upload attachment if present
+    let attachmentUrl: string | undefined = undefined;
+    if (attachmentFile) {
+      const arrayBuffer = await attachmentFile.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const { uploadFile } = await import('@/lib/minio');
+      attachmentUrl = await uploadFile(buffer, attachmentFile.name, attachmentFile.type);
+    }
+
     const transactionDate = validated.date ? new Date(validated.date) : new Date();
 
     const created = await prisma.$transaction(async (tx) => {
@@ -144,6 +188,7 @@ export async function POST(request: Request) {
           amount: validated.amount,
           date: transactionDate,
           note: validated.note || null,
+          attachmentUrl: attachmentUrl || null,
         },
         include: {
           wallet: true,

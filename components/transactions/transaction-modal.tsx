@@ -47,6 +47,7 @@ export function TransactionModal({
   const [categoryId, setCategoryId] = useState<string>("");
   const [date, setDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [note, setNote] = useState<string>("");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (transactionToEdit) {
@@ -249,18 +250,42 @@ export function TransactionModal({
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih Kategori" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {(type === "EXPENSE" ? expenseCategories : incomeCategories).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className="h-2.5 w-2.5 rounded-full"
-                            style={{ backgroundColor: c.color }}
-                          />
-                          {c.name}
-                        </span>
-                      </SelectItem>
-                    ))}
+                  <SelectContent className="max-h-[280px]">
+                    {(() => {
+                      const list = type === "EXPENSE" ? expenseCategories : incomeCategories;
+                      const parents = list.filter((c) => !c.parentId);
+                      return parents.map((parent) => {
+                        const children = list.filter((c) => c.parentId === parent.id);
+                        return (
+                          <React.Fragment key={parent.id}>
+                            <SelectItem value={parent.id} className="font-semibold text-xs py-1.5">
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className="h-2.5 w-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: parent.color }}
+                                />
+                                {parent.name}
+                              </span>
+                            </SelectItem>
+                            {children.map((sub) => (
+                              <SelectItem
+                                key={sub.id}
+                                value={sub.id}
+                                className="text-xs pl-7 py-1 text-muted-foreground hover:text-foreground"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    className="h-2 w-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: sub.color || parent.color }}
+                                  />
+                                  ↳ {sub.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </React.Fragment>
+                        );
+                      });
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
@@ -287,6 +312,17 @@ export function TransactionModal({
               placeholder="Contoh: Makan siang di warung, bayar wifi..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+
+          {/* Attachment File */}
+          <div className="space-y-1.5">
+            <Label htmlFor="attachment">Lampiran (Opsional)</Label>
+            <Input
+              id="attachment"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
             />
           </div>
 

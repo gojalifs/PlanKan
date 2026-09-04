@@ -32,6 +32,7 @@ import {
   Loader2,
   Calendar,
 } from "lucide-react";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.3, ease: "easeOut" },
+  },
+};
 
 export default function TransactionsPage() {
   const { data: session, isPending: isAuthPending } = useSession();
@@ -110,9 +130,17 @@ export default function TransactionsPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+      className="container mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8"
+    >
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <motion.div
+        variants={itemVariants}
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+      >
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Riwayat Transaksi
@@ -121,277 +149,333 @@ export default function TransactionsPage() {
             Catat dan pantau seluruh transaksi pengeluaran, pemasukan, dan transfer.
           </p>
         </div>
-        <Button onClick={handleOpenAdd} className="flex items-center gap-1.5 shadow-sm">
-          <Plus className="h-4 w-4" />
-          Catat Transaksi
-        </Button>
-      </div>
+        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <Button onClick={handleOpenAdd} className="flex items-center gap-1.5 shadow-sm shadow-primary/20">
+            <Plus className="h-4 w-4" />
+            Catat Transaksi
+          </Button>
+        </motion.div>
+      </motion.div>
 
       {/* Summary Cards for Current Filter */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card className="border-border shadow-2xs">
-          <CardContent className="p-4">
-            <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
-              Total Pemasukan Filter
-            </span>
-            <div className="text-xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 mt-1">
-              {isLoading ? "..." : formatRupiah(summary.totalIncome)}
-            </div>
-          </CardContent>
-        </Card>
+      <motion.div
+        variants={containerVariants}
+        className="grid grid-cols-1 gap-4 sm:grid-cols-3"
+      >
+        <motion.div variants={itemVariants} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+          <Card className="border-border shadow-2xs hover:shadow-sm transition-all">
+            <CardContent className="p-5">
+              <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
+                Total Pemasukan Filter
+              </span>
+              <div className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 mt-1">
+                {isLoading ? "..." : formatRupiah(summary.totalIncome)}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="border-border shadow-2xs">
-          <CardContent className="p-4">
-            <span className="text-xs font-semibold text-rose-600 uppercase tracking-wider">
-              Total Pengeluaran Filter
-            </span>
-            <div className="text-xl font-bold tracking-tight text-rose-600 dark:text-rose-400 mt-1">
-              {isLoading ? "..." : formatRupiah(summary.totalExpense)}
-            </div>
-          </CardContent>
-        </Card>
+        <motion.div variants={itemVariants} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+          <Card className="border-border shadow-2xs hover:shadow-sm transition-all">
+            <CardContent className="p-5">
+              <span className="text-xs font-semibold text-rose-600 uppercase tracking-wider">
+                Total Pengeluaran Filter
+              </span>
+              <div className="text-2xl font-bold tracking-tight text-rose-600 dark:text-rose-400 mt-1">
+                {isLoading ? "..." : formatRupiah(summary.totalExpense)}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="border-border shadow-2xs">
-          <CardContent className="p-4">
-            <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">
-              Selisih Bersih (Cash Flow)
-            </span>
-            <div
-              className={`text-xl font-bold tracking-tight mt-1 ${
-                summary.netCashflow >= 0
-                  ? "text-indigo-600 dark:text-indigo-400"
-                  : "text-rose-600 dark:text-rose-400"
-              }`}
-            >
-              {isLoading ? "..." : formatRupiah(summary.netCashflow)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        <motion.div variants={itemVariants} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+          <Card className="border-border shadow-2xs hover:shadow-sm transition-all">
+            <CardContent className="p-5">
+              <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">
+                Selisih Bersih (Cash Flow)
+              </span>
+              <div
+                className={`text-2xl font-bold tracking-tight mt-1 ${
+                  summary.netCashflow >= 0
+                    ? "text-indigo-600 dark:text-indigo-400"
+                    : "text-rose-600 dark:text-rose-400"
+                }`}
+              >
+                {isLoading ? "..." : formatRupiah(summary.netCashflow)}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </motion.div>
 
       {/* Filter Bar */}
-      <Card className="border-border">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            <div className="flex items-center gap-1.5">
-              <Filter className="h-3.5 w-3.5" />
-              Filter Transaksi
-            </div>
-            <button
-              onClick={handleResetFilters}
-              className="flex items-center gap-1 text-primary hover:underline lowercase font-normal"
-            >
-              <RotateCcw className="h-3 w-3" />
-              reset filter
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-            {/* Type */}
-            <div className="space-y-1">
-              <Label className="text-xs">Tipe</Label>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Semua Tipe" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Semua Tipe</SelectItem>
-                  <SelectItem value="EXPENSE">Pengeluaran</SelectItem>
-                  <SelectItem value="INCOME">Pemasukan</SelectItem>
-                  <SelectItem value="TRANSFER">Transfer</SelectItem>
-                </SelectContent>
-              </Select>
+      <motion.div variants={itemVariants}>
+        <Card className="border-border shadow-2xs">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="flex items-center gap-1.5">
+                <Filter className="h-3.5 w-3.5 text-primary" />
+                Filter Transaksi
+              </div>
+              <button
+                onClick={handleResetFilters}
+                className="flex items-center gap-1 text-primary hover:underline lowercase font-normal cursor-pointer"
+              >
+                <RotateCcw className="h-3 w-3" />
+                reset filter
+              </button>
             </div>
 
-            {/* Wallet */}
-            <div className="space-y-1">
-              <Label className="text-xs">Dompet</Label>
-              <Select value={filterWalletId} onValueChange={setFilterWalletId}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Semua Dompet" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Semua Dompet</SelectItem>
-                  {wallets.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5">
+              {/* Type */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Tipe</Label>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Semua Tipe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Semua Tipe</SelectItem>
+                    <SelectItem value="EXPENSE">Pengeluaran</SelectItem>
+                    <SelectItem value="INCOME">Pemasukan</SelectItem>
+                    <SelectItem value="TRANSFER">Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Category */}
-            <div className="space-y-1">
-              <Label className="text-xs">Kategori</Label>
-              <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Semua Kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Semua Kategori</SelectItem>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              {/* Wallet */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Dompet</Label>
+                <Select value={filterWalletId} onValueChange={setFilterWalletId}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Semua Dompet" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Semua Dompet</SelectItem>
+                    {wallets.map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Start Date */}
-            <div className="space-y-1">
-              <Label className="text-xs">Dari Tanggal</Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
+              {/* Category */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Kategori</Label>
+                <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Semua Kategori" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[280px]">
+                    <SelectItem value="ALL">Semua Kategori</SelectItem>
+                    {(() => {
+                      const parents = categories.filter((c) => !c.parentId);
+                      return parents.map((parent) => {
+                        const children = categories.filter((c) => c.parentId === parent.id);
+                        return (
+                          <React.Fragment key={parent.id}>
+                            <SelectItem value={parent.id} className="font-semibold text-xs py-1.5">
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className="h-2 w-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: parent.color }}
+                                />
+                                {parent.name}
+                              </span>
+                            </SelectItem>
+                            {children.map((sub) => (
+                              <SelectItem
+                                key={sub.id}
+                                value={sub.id}
+                                className="text-xs pl-6 py-1 text-muted-foreground"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: sub.color || parent.color }}
+                                  />
+                                  ↳ {sub.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </React.Fragment>
+                        );
+                      });
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* End Date */}
-            <div className="space-y-1">
-              <Label className="text-xs">Sampai Tanggal</Label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="h-8 text-xs"
-              />
+              {/* Start Date */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Dari Tanggal</Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              {/* End Date */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Sampai Tanggal</Label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Transactions List Table */}
-      <Card className="border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">
-            Daftar Transaksi ({transactions.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="py-12 flex justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : transactions.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground mb-3">
-                <ArrowLeftRight className="h-6 w-6" />
+      <motion.div variants={itemVariants}>
+        <Card className="border-border shadow-xs overflow-hidden">
+          <CardHeader className="pb-3 border-b border-border/50">
+            <CardTitle className="text-base font-semibold">
+              Daftar Transaksi ({transactions.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            {isLoading ? (
+              <div className="py-12 flex justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-              <p className="text-sm font-medium">Tidak ada transaksi yang cocok</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Coba ubah filter atau catat transaksi baru.
-              </p>
-              <Button onClick={handleOpenAdd} size="sm" className="mt-4">
-                <Plus className="mr-1.5 h-4 w-4" />
-                Catat Transaksi
-              </Button>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {transactions.map((tx) => {
-                const isIncome = tx.type === "INCOME";
-                const isExpense = tx.type === "EXPENSE";
-                const isTransfer = tx.type === "TRANSFER";
+            ) : transactions.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground mb-3">
+                  <ArrowLeftRight className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-medium">Tidak ada transaksi yang cocok</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Coba ubah filter atau catat transaksi baru.
+                </p>
+                <Button onClick={handleOpenAdd} size="sm" className="mt-4">
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Catat Transaksi
+                </Button>
+              </div>
+            ) : (
+              <motion.div layout className="divide-y divide-border">
+                <AnimatePresence mode="popLayout">
+                  {transactions.map((tx) => {
+                    const isIncome = tx.type === "INCOME";
+                    const isExpense = tx.type === "EXPENSE";
+                    const isTransfer = tx.type === "TRANSFER";
 
-                return (
-                  <div
-                    key={tx.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between py-3.5 hover:bg-muted/30 px-2 rounded-lg gap-2 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                          isIncome
-                            ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
-                            : isExpense
-                            ? "bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400"
-                            : "bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-400"
-                        }`}
+                    return (
+                      <motion.div
+                        layout
+                        key={tx.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        whileHover={{ x: 3 }}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between py-3.5 px-2 hover:bg-muted/40 rounded-lg gap-2 transition-colors"
                       >
-                        {isIncome && <ArrowDownLeft className="h-5 w-5" />}
-                        {isExpense && <ArrowUpRight className="h-5 w-5" />}
-                        {isTransfer && <ArrowLeftRight className="h-5 w-5" />}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold">
-                            {isTransfer
-                              ? `Transfer: ${tx.wallet?.name} ➔ ${tx.destinationWallet?.name}`
-                              : tx.category?.name || "Tanpa Kategori"}
-                          </p>
-                          <Badge
-                            variant={
-                              isIncome ? "income" : isExpense ? "expense" : "transfer"
-                            }
-                            className="text-[10px]"
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-2xs ${
+                              isIncome
+                                ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
+                                : isExpense
+                                ? "bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400"
+                                : "bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-400"
+                            }`}
                           >
-                            {tx.type}
-                          </Badge>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {formatDateIndo(tx.date)}
-                          </span>
-                          <span>•</span>
-                          <span>Dompet: {tx.wallet?.name}</span>
-                          {tx.note && (
-                            <>
+                            {isIncome && <ArrowDownLeft className="h-5 w-5" />}
+                            {isExpense && <ArrowUpRight className="h-5 w-5" />}
+                            {isTransfer && <ArrowLeftRight className="h-5 w-5" />}
+                          </div>
+
+                          <div className="truncate">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold truncate">
+                                {isTransfer
+                                  ? `Transfer: ${tx.wallet?.name} ➔ ${tx.destinationWallet?.name}`
+                                  : tx.category?.parent
+                                  ? `${tx.category.parent.name} ➔ ${tx.category.name}`
+                                  : tx.category?.name || "Tanpa Kategori"}
+                              </p>
+                              <Badge
+                                variant={
+                                  isIncome ? "income" : isExpense ? "expense" : "transfer"
+                                }
+                                className="text-[10px] shrink-0"
+                              >
+                                {tx.type}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {formatDateIndo(tx.date)}
+                              </span>
                               <span>•</span>
-                              <span className="italic text-foreground/80">"{tx.note}"</span>
-                            </>
-                          )}
+                              <span>Dompet: {tx.wallet?.name}</span>
+                              {tx.note && (
+                                <>
+                                  <span>•</span>
+                                  <span className="italic text-foreground/80 truncate max-w-[200px]">
+                                    "{tx.note}"
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-4">
-                      <p
-                        className={`text-base font-bold ${
-                          isIncome
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : isExpense
-                            ? "text-rose-600 dark:text-rose-400"
-                            : "text-sky-600 dark:text-sky-400"
-                        }`}
-                      >
-                        {isIncome ? "+" : isExpense ? "-" : ""}
-                        {formatRupiah(tx.amount)}
-                      </p>
+                        <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 mt-1 sm:mt-0">
+                          <p
+                            className={`text-base font-bold ${
+                              isIncome
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : isExpense
+                                ? "text-rose-600 dark:text-rose-400"
+                                : "text-sky-600 dark:text-sky-400"
+                            }`}
+                          >
+                            {isIncome ? "+" : isExpense ? "-" : ""}
+                            {formatRupiah(tx.amount)}
+                          </p>
 
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleEdit(tx)}
-                          title="Edit Transaksi"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => setTxToDelete(tx)}
-                          title="Hapus Transaksi"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors"
+                              onClick={() => handleEdit(tx)}
+                              title="Edit Transaksi"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors"
+                              onClick={() => setTxToDelete(tx)}
+                              title="Hapus Transaksi"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Add / Edit Transaction Modal */}
       <TransactionModal
@@ -436,6 +520,6 @@ export default function TransactionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </motion.div>
   );
 }
