@@ -2,49 +2,76 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signIn } from "@/lib/auth-client";
+import { requestPasswordReset } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { motion } from "framer-motion";
-import { Wallet, Loader2, ArrowRight } from "lucide-react";
+import { Wallet, Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
-export default function LoginPage() {
-  const router = useRouter();
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      toast.error("Silakan isi email dan password");
+    if (!email) {
+      toast.error("Silakan isi email Anda");
       return;
     }
 
     setIsLoading(true);
     try {
-      const res = await signIn.email({
+      await requestPasswordReset({
         email,
-        password,
+        redirectTo: "/reset-password",
       });
-
-      if (res?.error) {
-        toast.error(res.error.message || "Email atau password salah");
-      } else {
-        toast.success("Berhasil masuk!");
-        router.push("/");
-        router.refresh();
-      }
+      setSent(true);
     } catch (err: any) {
-      toast.error(err.message || "Terjadi kesalahan saat login");
+      toast.error(err.message || "Gagal mengirim email reset password");
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (sent) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gradient-to-b from-primary/5 via-background to-background p-4 sm:p-6 lg:p-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="w-full max-w-md"
+        >
+          <Card className="shadow-lg border-border/80 rounded-2xl overflow-hidden backdrop-blur-xs">
+            <CardContent className="flex flex-col items-center space-y-4 px-6 sm:px-8 py-12 text-center">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.1 }}
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30"
+              >
+                <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+              </motion.div>
+              <CardTitle className="text-xl font-bold">Email Terkirim!</CardTitle>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Kami telah mengirim link reset password ke <strong className="text-foreground">{email}</strong>.
+                Silakan cek email Anda dan ikuti instruksi di dalamnya.
+              </p>
+              <Link href="/login" className="pt-2">
+                <Button variant="outline" className="font-semibold">
+                  Kembali ke Login
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gradient-to-b from-primary/5 via-background to-background p-4 sm:p-6 lg:p-8">
@@ -63,14 +90,14 @@ export default function LoginPage() {
               <Wallet className="h-7 w-7" />
             </motion.div>
             <CardTitle className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Selamat Datang di PlanKan
+              Lupa Password?
             </CardTitle>
             <CardDescription className="text-sm max-w-xs mx-auto">
-              Kelola budget & keuangan harian Anda dengan mudah dan terencana
+              Masukkan email Anda dan kami akan mengirimkan link untuk mereset password.
             </CardDescription>
           </CardHeader>
 
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4 px-6 sm:px-8">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">Email</Label>
@@ -85,24 +112,6 @@ export default function LoginPage() {
                   autoFocus
                 />
               </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                  <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">
-                    Lupa password?
-                  </Link>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-10 text-sm rounded-lg"
-                  required
-                />
-              </div>
             </CardContent>
 
             <CardFooter className="flex flex-col space-y-3 px-6 sm:px-8 pb-8 pt-2">
@@ -111,11 +120,11 @@ export default function LoginPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Masuk...
+                      Mengirim...
                     </>
                   ) : (
                     <>
-                      Masuk ke Dashboard
+                      Kirim Link Reset
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </>
                   )}
@@ -123,9 +132,9 @@ export default function LoginPage() {
               </motion.div>
 
               <p className="text-center text-sm text-muted-foreground pt-1">
-                Belum punya akun?{" "}
-                <Link href="/register" className="font-semibold text-primary hover:underline">
-                  Daftar sekarang
+                Ingat password Anda?{" "}
+                <Link href="/login" className="font-semibold text-primary hover:underline">
+                  Kembali ke Login
                 </Link>
               </p>
             </CardFooter>

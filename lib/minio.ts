@@ -6,7 +6,7 @@ const accessKey = process.env.MINIO_ACCESS_KEY || '';
 const secretKey = process.env.MINIO_SECRET_KEY || '';
 const bucket = process.env.MINIO_BUCKET || 'transactions';
 
-const minioClient = new Client({
+export const minioClient = new Client({
   endPoint: endpoint,
   port,
   useSSL: false,
@@ -14,9 +14,16 @@ const minioClient = new Client({
   secretKey,
 });
 
+export const bucketName = bucket;
+
 /**
- * Upload a file buffer to MinIO and return its public URL.
- * The object name will be a timestamped filename to avoid collisions.
+ * Upload a file buffer to MinIO and return a same-origin relative path.
+ *
+ * The returned path (e.g. `/transactions/<objectName>`) is served through
+ * this app (see `app/transactions/[...path]/route.ts`) instead of exposing
+ * MinIO's internal host (`plankan-minio:9000`), which is unreachable and
+ * undesirable from the browser. The object name is timestamped to avoid
+ * collisions.
  */
 export async function uploadFile(buffer: Buffer, originalName: string, mimeType: string): Promise<string> {
   // Ensure bucket exists
@@ -26,13 +33,12 @@ export async function uploadFile(buffer: Buffer, originalName: string, mimeType:
   }
 
   const timestamp = Date.now();
-  const ext = originalName.substring(originalName.lastIndexOf('.')) || '';
   const objectName = `${timestamp}-${originalName.replace(/\s+/g, '_')}`;
 
   await minioClient.putObject(bucket, objectName, buffer, buffer.length, {
     'Content-Type': mimeType,
   });
 
-  // Construct a simple HTTP URL (MinIO default is http://<endpoint>:<port>/<bucket>/<object>)
-  return `http://${endpoint}:${port}/${bucket}/${objectName}`;
+  // Relative to the app origin: browsers resolve it against the base URL.
+  return `/${bucket}/${objectName}`;
 }

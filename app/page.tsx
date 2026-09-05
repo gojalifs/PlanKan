@@ -22,9 +22,12 @@ import {
   ShieldCheck,
   Zap,
   Sparkles,
+  Eye,
 } from "lucide-react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
+import { TransactionDetailDialog } from "@/components/transactions/transaction-detail";
+import type { Transaction } from "@/lib/hooks/use-transactions";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -49,6 +52,7 @@ export default function HomePage() {
   const { data: session, isPending } = useSession();
   const { data: summary, isLoading: isSummaryLoading } = useSummary();
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [txToView, setTxToView] = useState<Transaction | null>(null);
 
   // If loading session state
   if (isPending) {
@@ -506,27 +510,38 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <p
-                            className={`text-sm font-bold ${
-                              isIncome
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : isExpense
-                                ? "text-rose-600 dark:text-rose-400"
-                                : "text-sky-600 dark:text-sky-400"
-                            }`}
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <p
+                              className={`text-sm font-bold ${
+                                isIncome
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : isExpense
+                                  ? "text-rose-600 dark:text-rose-400"
+                                  : "text-sky-600 dark:text-sky-400"
+                              }`}
+                            >
+                              {isIncome ? "+" : isExpense ? "-" : ""}
+                              {formatRupiah(tx.amount)}
+                            </p>
+                            <Badge
+                              variant={
+                                isIncome ? "income" : isExpense ? "expense" : "transfer"
+                              }
+                              className="text-[10px] mt-1"
+                            >
+                              {tx.type}
+                            </Badge>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors"
+                            onClick={() => setTxToView(tx)}
+                            title="Lihat Detail"
                           >
-                            {isIncome ? "+" : isExpense ? "-" : ""}
-                            {formatRupiah(tx.amount)}
-                          </p>
-                          <Badge
-                            variant={
-                              isIncome ? "income" : isExpense ? "expense" : "transfer"
-                            }
-                            className="text-[10px] mt-1"
-                          >
-                            {tx.type}
-                          </Badge>
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </motion.div>
                     );
@@ -541,6 +556,12 @@ export default function HomePage() {
       <TransactionModal
         open={isTxModalOpen}
         onOpenChange={setIsTxModalOpen}
+      />
+
+      <TransactionDetailDialog
+        transaction={txToView}
+        open={!!txToView}
+        onOpenChange={(open) => !open && setTxToView(null)}
       />
     </motion.div>
   );

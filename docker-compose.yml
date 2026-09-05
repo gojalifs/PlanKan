@@ -13,13 +13,14 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
-      - BETTER_AUTH_URL=https://budget.twogether.click
-      - NEXT_PUBLIC_APP_URL=https://budget.twogether.click
-      # In docker network sjo_default, postgres is accessible at postgres:5432 or sjo-postgres-1:5432
-      - DATABASE_URL=postgresql://sjo-user:11e89474f8d6b07ddd2889a67fed8c9f@postgres:5432/plankan
+      - MINIO_ENDPOINT=plankan-minio
+      - "RECEIPT_TMP_DIR=/tmp/plankan-receipts"
+    depends_on:
+      minio:
+        condition: service_healthy
     networks:
       - proxy
-#      - sjo_default
+      - sjo_default
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
@@ -28,27 +29,40 @@ services:
       - "traefik.http.routers.plankan.tls=true"
       - "traefik.http.routers.plankan.tls.certresolver=letsencrypt"
       - "traefik.http.services.plankan.loadbalancer.server.port=3000"
-  
+
   minio:
     image: minio/minio:latest
     container_name: plankan-minio
+    restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     command: server /data --console-address ":9001"
-#    ports:
-#      - "9000:9000"
-#      - "9001:9001"
     volumes:
       - minio-data:/data
     networks:
       - proxy
-#      - sjo_default
-
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.minio-console.entrypoints=websecure"
+      - "traefik.http.routers.minio-console.rule=Host(`minio.twogether.click`)"
+      - "traefik.http.routers.minio-console.tls=true"
+      - "traefik.http.routers.minio-console.tls.certresolver=letsencrypt"
+      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
 
 networks:
   proxy:
     external: true
+  sjo_default:
+    external: true
+
 volumes:
   minio-data:
     external: true

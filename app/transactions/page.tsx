@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { useTransactions, Transaction } from "@/lib/hooks/use-transactions";
@@ -20,6 +20,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
+import { TransactionDetailDialog } from "@/components/transactions/transaction-detail";
+import { ReceiptFlow } from "@/components/transactions/receipt-flow";
+import { CategorySelect } from "@/components/categories/category-select";
 import {
   ArrowLeftRight,
   ArrowUpRight,
@@ -31,6 +34,7 @@ import {
   RotateCcw,
   Loader2,
   Calendar,
+  Eye,
 } from "lucide-react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import {
@@ -91,6 +95,7 @@ export default function TransactionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [txToEdit, setTxToEdit] = useState<Transaction | null>(null);
   const [txToDelete, setTxToDelete] = useState<Transaction | null>(null);
+  const [txToView, setTxToView] = useState<Transaction | null>(null);
 
   if (isAuthPending) {
     return (
@@ -264,48 +269,15 @@ export default function TransactionsPage() {
               {/* Category */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Kategori</Label>
-                <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Semua Kategori" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[280px]">
-                    <SelectItem value="ALL">Semua Kategori</SelectItem>
-                    {(() => {
-                      const parents = categories.filter((c) => !c.parentId);
-                      return parents.map((parent) => {
-                        const children = categories.filter((c) => c.parentId === parent.id);
-                        return (
-                          <React.Fragment key={parent.id}>
-                            <SelectItem value={parent.id} className="font-semibold text-xs py-1.5">
-                              <span className="flex items-center gap-2">
-                                <span
-                                  className="h-2 w-2 rounded-full shrink-0"
-                                  style={{ backgroundColor: parent.color }}
-                                />
-                                {parent.name}
-                              </span>
-                            </SelectItem>
-                            {children.map((sub) => (
-                              <SelectItem
-                                key={sub.id}
-                                value={sub.id}
-                                className="text-xs pl-6 py-1 text-muted-foreground"
-                              >
-                                <span className="flex items-center gap-2">
-                                  <span
-                                    className="h-1.5 w-1.5 rounded-full shrink-0"
-                                    style={{ backgroundColor: sub.color || parent.color }}
-                                  />
-                                  ↳ {sub.name}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </React.Fragment>
-                        );
-                      });
-                    })()}
-                  </SelectContent>
-                </Select>
+                <CategorySelect
+                  categories={categories}
+                  value={filterCategoryId}
+                  onValueChange={setFilterCategoryId}
+                  placeholder="Semua Kategori"
+                  triggerClassName="h-9 text-xs"
+                  contentClassName="max-h-[280px]"
+                  includeAllOption
+                />
               </div>
 
               {/* Start Date */}
@@ -451,6 +423,15 @@ export default function TransactionsPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors"
+                              onClick={() => setTxToView(tx)}
+                              title="Lihat Detail"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors"
                               onClick={() => handleEdit(tx)}
                               title="Edit Transaksi"
                             >
@@ -483,6 +464,16 @@ export default function TransactionsPage() {
         onOpenChange={setIsModalOpen}
         transactionToEdit={txToEdit}
       />
+
+      {/* Transaction Detail Dialog */}
+      <TransactionDetailDialog
+        transaction={txToView}
+        open={!!txToView}
+        onOpenChange={(open) => !open && setTxToView(null)}
+      />
+
+      {/* Receipt → Multi-Transaction Flow (camera FAB + dialogs) */}
+      <ReceiptFlow />
 
       {/* Delete Confirmation Dialog */}
       <Dialog

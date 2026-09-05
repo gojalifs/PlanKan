@@ -15,7 +15,7 @@ import {
   useBudgetPeriodSetting,
 } from "@/lib/hooks/use-budget-period";
 import { lastWorkingDayOf } from "@/lib/budget-period";
-import { CalendarCog, Loader2, Trash2, AlertCircle } from "lucide-react";
+import { CalendarCog, Loader2, Trash2, AlertCircle, Minus, Plus } from "lucide-react";
 
 const MONTH_NAMES = [
   "Januari","Februari","Maret","April","Mei","Juni",
@@ -144,19 +144,39 @@ export function BudgetPeriodOverrideModal({ open, onOpenChange, budgetMonth, bud
               <span>{daysInPrevMonth}</span>
             </div>
 
-            {/* Number input */}
+            {/* Stepper + number input */}
             <div className="flex items-center gap-2 justify-center mt-1">
               <span className="text-sm text-muted-foreground">Tanggal:</span>
-              <input
-                type="number"
-                min={1}
-                max={daysInPrevMonth}
-                value={startDay}
-                onChange={(e) =>
-                  setStartDay(Math.min(daysInPrevMonth, Math.max(1, Number(e.target.value))))
-                }
-                className="w-16 rounded-lg border border-border bg-background px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <div className="flex items-center rounded-lg border border-border bg-background overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setStartDay((d) => Math.max(1, d - 1))}
+                  disabled={startDay <= 1}
+                  className="px-2.5 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Kurangi tanggal"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={daysInPrevMonth}
+                  value={startDay}
+                  onChange={(e) =>
+                    setStartDay(Math.min(daysInPrevMonth, Math.max(1, Number(e.target.value))))
+                  }
+                  className="w-14 border-x border-border bg-background px-1 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setStartDay((d) => Math.min(daysInPrevMonth, d + 1))}
+                  disabled={startDay >= daysInPrevMonth}
+                  className="px-2.5 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Tambah tanggal"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
 

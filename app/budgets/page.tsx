@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BudgetModal } from "@/components/budgets/budget-modal";
+import { BudgetPeriodSettingModal } from "@/components/budgets/budget-period-setting-modal";
+import { BudgetPeriodOverrideModal } from "@/components/budgets/budget-period-override-modal";
 import {
   Target,
   Plus,
@@ -21,6 +23,8 @@ import {
   Tag,
   Loader2,
   SlidersHorizontal,
+  CalendarCog,
+  CalendarDays,
   ChevronDown,
   ChevronUp,
   CornerDownRight,
@@ -82,12 +86,16 @@ export default function BudgetsPage() {
   const {
     items,
     summary,
+    periodLabel,
+    isOverridden,
     isLoading,
     deleteBudget,
     isDeleting,
   } = useBudgets(selectedMonth, selectedYear);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSettingOpen, setIsSettingOpen] = useState(false);
+  const [isOverrideOpen, setIsOverrideOpen] = useState(false);
   const [selectedBudgetItem, setSelectedBudgetItem] = useState<BudgetItem | SubBudgetItem | null>(null);
   const [defaultCatId, setDefaultCatId] = useState<string | undefined>(undefined);
   const [budgetToDelete, setBudgetToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -182,6 +190,20 @@ export default function BudgetsPage() {
           <p className="text-sm text-muted-foreground mt-1">
             Tetapkan batas anggaran pada kategori utama maupun per sub-kategori untuk kontrol keuangan optimal.
           </p>
+
+          {/* Budget period indicator */}
+          {periodLabel && (
+            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+              <CalendarDays className="h-3.5 w-3.5 text-primary" />
+              <span>
+                Periode:{" "}
+                <span className="font-semibold text-foreground">{periodLabel}</span>
+              </span>
+              {isOverridden && (
+                <Badge variant="warning" className="text-[10px]">Override</Badge>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -209,6 +231,28 @@ export default function BudgetsPage() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+
+          {/* Task 2: Per-month override */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => setIsOverrideOpen(true)}
+            title="Override Awal Bulan Budget"
+          >
+            <CalendarCog className="h-4 w-4" />
+          </Button>
+
+          {/* Task 1: Global start-day setting */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => setIsSettingOpen(true)}
+            title="Pengaturan Awal Bulan Budget"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </Button>
 
           <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
             <Button
@@ -759,6 +803,20 @@ export default function BudgetsPage() {
         onOpenChange={setIsModalOpen}
         budgetItem={selectedBudgetItem}
         defaultCategoryId={defaultCatId}
+      />
+
+      {/* Task 1: Global budget period setting */}
+      <BudgetPeriodSettingModal
+        open={isSettingOpen}
+        onOpenChange={setIsSettingOpen}
+      />
+
+      {/* Task 2: Per-month budget period override */}
+      <BudgetPeriodOverrideModal
+        open={isOverrideOpen}
+        onOpenChange={setIsOverrideOpen}
+        budgetMonth={selectedMonth}
+        budgetYear={selectedYear}
       />
 
       {/* Delete Confirmation Dialog */}

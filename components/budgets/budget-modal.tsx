@@ -11,17 +11,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { CategorySelect } from "@/components/categories/category-select";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useBudgets, BudgetItem, SubBudgetItem } from "@/lib/hooks/use-budgets";
 import { formatRupiah } from "@/lib/utils";
-import { Loader2, Target, Tag, CornerDownRight } from "lucide-react";
+import { Loader2, Target, Tag } from "lucide-react";
 
 interface BudgetModalProps {
   open: boolean;
@@ -75,9 +69,6 @@ export function BudgetModal({
 
   const quickAmounts = [250000, 500000, 1000000, 2000000, 5000000];
 
-  // Organize categories into parents and children for selector
-  const parentCats = expenseCategories.filter((c) => !c.parentId);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[460px]">
@@ -123,48 +114,15 @@ export function BudgetModal({
                 </div>
               </div>
             ) : (
-              <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger className="h-10 text-xs">
-                  <SelectValue placeholder="Pilih Kategori atau Sub-Kategori" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px]">
-                  {parentCats.map((parent) => {
-                    const children = expenseCategories.filter((c) => c.parentId === parent.id);
-                    return (
-                      <React.Fragment key={parent.id}>
-                        {/* Parent Category Option */}
-                        <SelectItem value={parent.id} className="font-semibold text-xs py-2">
-                          <span className="flex items-center gap-2">
-                            <span
-                              className="h-2.5 w-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: parent.color }}
-                            />
-                            [Induk] {parent.name}
-                          </span>
-                        </SelectItem>
-
-                        {/* Sub-Category Options */}
-                        {children.map((sub) => (
-                          <SelectItem
-                            key={sub.id}
-                            value={sub.id}
-                            className="text-xs pl-7 py-1.5 text-muted-foreground hover:text-foreground"
-                          >
-                            <span className="flex items-center gap-2">
-                              <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <span
-                                className="h-2 w-2 rounded-full shrink-0"
-                                style={{ backgroundColor: sub.color || parent.color }}
-                              />
-                              {sub.name}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </React.Fragment>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <CategorySelect
+                categories={expenseCategories}
+                value={categoryId}
+                onValueChange={setCategoryId}
+                placeholder="Pilih Kategori atau Sub-Kategori"
+                parentPrefix="[Induk] "
+                triggerClassName="h-10 text-xs"
+                contentClassName="max-h-[300px]"
+              />
             )}
           </div>
 

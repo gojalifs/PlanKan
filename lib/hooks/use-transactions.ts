@@ -60,7 +60,10 @@ export function useTransactions(filters?: TransactionFilters) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: {
+    mutationFn: async ({
+      silent,
+      ...data
+    }: {
       walletId: string;
       destinationWalletId?: string | null;
       categoryId?: string | null;
@@ -69,6 +72,8 @@ export function useTransactions(filters?: TransactionFilters) {
       date?: string;
       note?: string | null;
       attachmentFile?: File | null;
+      /** Skip the per-row success toast (multi-receipt saves). */
+      silent?: boolean;
     }) => {
       // If there is a file, use multipart/form-data
       if (data.attachmentFile) {
@@ -99,10 +104,12 @@ export function useTransactions(filters?: TransactionFilters) {
       if (!res.ok) throw new Error(result.error || 'Gagal mencatat transaksi');
       return result.transaction;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["wallets"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
+      // Silent saves (multi-receipt rows) fire one toast at the end, not N.
+      if ((variables as any).silent) return;
       toast.success("Transaksi berhasil dicatat!");
     },
     onError: (err: any) => {

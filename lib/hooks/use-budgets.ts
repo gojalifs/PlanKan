@@ -134,6 +134,8 @@ export function useBudgets(month?: number, year?: number) {
     },
     month: currentMonth,
     year: currentYear,
+    periodLabel: query.data?.periodLabel || "",
+    isOverridden: query.data?.isOverridden || false,
     isLoading: query.isLoading,
     isError: query.isError,
     refetch: query.refetch,

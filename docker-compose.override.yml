@@ -1,0 +1,16 @@
+# Local development overrides — automatically loaded with `docker-compose up`
+# Production does NOT use this file: `docker-compose -f docker-compose.yml up`
+services:
+  plankan_app:
+    container_name: plankan-app-dev
+    environment:
+      - NODE_ENV=development
+      - MINIO_ENDPOINT=plankan-minio
+    ports:
+      - "3000:3000"
+    labels: []   # disable Traefik in local dev
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
