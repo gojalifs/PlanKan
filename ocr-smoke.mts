@@ -1,0 +1,9 @@
+import { readFileSync } from "node:fs";
+import "dotenv/config";
+import { extractReceiptItems } from "@/lib/receipt-ocr";
+const data = readFileSync("/home/gojali/plan-kan/public/Screenshot_20260905-173401_Files by Google.png");
+const items = await extractReceiptItems({ data, mimeType: "image/png" });
+console.log("COUNT:", items.length);
+console.log("NEGATIVE_TOTALS:", items.filter(i => i.lineTotal < 0).length);
+console.log("SUM:", items.reduce((a, i) => a + i.lineTotal, 0));
+for (const i of items) console.log(`${i.qty} x ${i.name} | @${i.unitPrice} = ${i.lineTotal}`);

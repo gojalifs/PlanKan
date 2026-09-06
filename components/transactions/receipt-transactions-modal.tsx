@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useWallets } from "@/lib/hooks/use-wallets";
 import { useCategories } from "@/lib/hooks/use-categories";
@@ -31,7 +31,13 @@ interface ReceiptRow {
   key: string;
   itemName: string;
   categoryId: string;
+  /** Category was suggested by OCR/AI and not yet changed by the user. */
+  aiSuggested: boolean;
   amount: string;
+  /** Harga sebelum diskon (display-only, dari OCR). */
+  originalPrice: number;
+  /** Potongan Rupiah pada baris ini (display-only, dari OCR). */
+  discount: number;
   note: string;
   saved: boolean;
 }
@@ -46,9 +52,9 @@ interface ReceiptTransactionsModalProps {
 
 /**
  * Second step of the receipt flow: one editable transaction per receipt
- * line item. Wallet & date are shared across all rows; category is chosen
- * manually per row. The receipt photo is shown on top and attached to the
- * top-most row on save.
+ * line item. Wallet & date are shared across all rows; category is pre-filled
+ * from the OCR suggestion but always overridable per row. The receipt photo
+ * is shown on top and attached to the top-most row on save.
  */
 export function ReceiptTransactionsModal({
   open,
@@ -75,8 +81,11 @@ export function ReceiptTransactionsModal({
         receipt.items.map((item) => ({
           key: item.id,
           itemName: item.name,
-          categoryId: "",
+          categoryId: item.categoryId ?? "",
+          aiSuggested: Boolean(item.categoryId),
           amount: String(item.lineTotal),
+          originalPrice: item.originalPrice,
+          discount: item.discount,
           note: formatReceiptNote(item),
           saved: false,
         }))
@@ -258,7 +267,7 @@ export function ReceiptTransactionsModal({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Nominal (Rp)</Label>
+                    <Label className="text-xs text-muted-foreground">Nominal akhir (Rp)</Label>
                     <Input
                       type="number"
                       step="any"
@@ -266,13 +275,33 @@ export function ReceiptTransactionsModal({
                       onChange={(e) => updateRow(row.key, { amount: e.target.value })}
                       className="h-9 text-sm"
                     />
+                    {/* Harga asli + diskon dari OCR — hanya tampilan */}
+                    {row.discount > 0 && (
+                      <p className="text-[11px] leading-tight text-muted-foreground">
+                        Harga asli{" "}
+                        <span className="line-through">{formatRupiah(row.originalPrice)}</span>
+                        <span className="mx-1">·</span>
+                        Diskon{" "}
+                        <span className="font-semibold text-emerald-600">
+                          −{formatRupiah(row.discount)}
+                        </span>
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Kategori</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs text-muted-foreground">Kategori</Label>
+                      {row.aiSuggested && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary">
+                          <Sparkles className="h-2.5 w-2.5" />
+                          Saran AI
+                        </span>
+                      )}
+                    </div>
                     <CategorySelect
                       categories={expenseCategories}
                       value={row.categoryId}
-                      onValueChange={(v) => updateRow(row.key, { categoryId: v })}
+                      onValueChange={(v) => updateRow(row.key, { categoryId: v, aiSuggested: false })}
                       contentClassName="max-h-[220px]"
                     />
                   </div>

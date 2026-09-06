@@ -18,8 +18,19 @@ export interface ReceiptItem {
   unit: string | null;
   /** Price for one unit. */
   unitPrice: number;
-  /** qty * unitPrice — the amount actually recorded for the transaction. */
+  /** qty * unitPrice (minus any discount) — the amount actually recorded
+   * for the transaction. Discounts are folded into this value on the OCR
+   * side; this is always the price after discount and the one saved. */
   lineTotal: number;
+  /** Potongan harga (Rp) applied to this line, 0 when none. Display-only:
+   * the amount recorded is always `lineTotal` (after discount). */
+  discount: number;
+  /** Line amount before any discount (= lineTotal + discount). Display-only,
+   * so the modal can show "harga asli → harga bayar". */
+  originalPrice: number;
+  /** Best-guess user category id (from Gemini against the user's category
+   * list), pre-filled in the form but always overridable by the user. */
+  categoryId: string | null;
 }
 
 export interface ReceiptUpload {
@@ -29,7 +40,7 @@ export interface ReceiptUpload {
   imageUrl: string;
   /** Original file name, for display. */
   fileName: string;
-  /** Line items — STUB for now, identical shape when real OCR lands. */
+  /** Line items extracted by OCR. */
   items: ReceiptItem[];
 }
 

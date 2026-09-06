@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth-server";
-import { saveReceiptFile, cleanupStaleReceipts } from "@/lib/receipt-storage";
-import { getReceiptStub } from "@/lib/receipt-stub";
+import { prisma } from "@/lib/prisma";
+import { ensureUserStarterData } from "@/lib/default-categories";
+import { saveReceiptFile, cleanupStaleReceipts, readReceiptFile } from "@/lib/receipt-storage";
+import { getReceiptItems, type ReceiptCategory } from "@/lib/receipt-ocr";
+import type { ReceiptItem } from "@/lib/receipt";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 // POST /api/receipts  (multipart/form-data, field "image")
 // Saves the receipt image to a local temp dir (NOT MinIO) and returns the
-// receipt contract with STUB line items. Real OCR later only replaces the
-// item source; the response shape stays stable.
+// receipt contract with line items extracted by Gemini vision OCR. Without a
+// GEMINI_API_KEY it falls back to the deterministic stub (dev).
 export async function POST(request: Request) {
   try {
     const session = await getServerSession();
@@ -34,7 +37,36 @@ export async function POST(request: Request) {
     // Opportunistic sweep of abandoned temp receipts (best-effort)
     cleanupStaleReceipts().catch(() => {});
 
-    const items = getReceiptStub();
+    // Real Gemini vision OCR when a key is configured; stub fallback in dev.
+    let items: ReceiptItem[] = [];
+    const stored = await readReceiptFile(id);
+    if (stored) {
+      try {
+        // Make sure default categories exist, then hand the user's expense
+        // categories to the model so it can suggest a category per item.
+        await ensureUserStarterData(session.user.id);
+        const cats = await prisma.category.findMany({
+          where: { userId: session.user.id, type: "EXPENSE" },
+          select: { id: true, name: true, parent: { select: { name: true } } },
+        });
+        const categories: ReceiptCategory[] = cats.map((c) => ({
+          id: c.id,
+          name: c.name,
+          parentName: c.parent?.name ?? null,
+        }));
+
+        ({ items } = await getReceiptItems(
+          { data: stored.data, mimeType: stored.mimeType },
+          categories
+        ));
+      } catch (error: any) {
+        console.error("Gemini OCR error:", error);
+        return NextResponse.json(
+          { error: "Gagal membaca struk: " + (error?.message || "kesalahan tak dikenal") },
+          { status: 502 }
+        );
+      }
+    }
 
     return NextResponse.json(
       {
