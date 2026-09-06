@@ -18,6 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AmountInput } from "@/components/ui/amount-input";
+import { formatAmountNumber, parseAmountInput } from "@/lib/format";
 import { useWallets, Wallet } from "@/lib/hooks/use-wallets";
 import { Loader2 } from "lucide-react";
 
@@ -65,7 +67,7 @@ export function WalletModal({
     if (walletToEdit) {
       setName(walletToEdit.name);
       setType(walletToEdit.type);
-      setBalance(String(walletToEdit.balance));
+      setBalance(formatAmountNumber(walletToEdit.balance));
       setColor(walletToEdit.color);
       setIsExcludedFromTotal(walletToEdit.isExcludedFromTotal);
     } else {
@@ -81,7 +83,7 @@ export function WalletModal({
     e.preventDefault();
     if (!name.trim()) return;
 
-    const numBalance = parseFloat(balance.replace(/[^0-9.-]/g, "")) || 0;
+    const numBalance = parseAmountInput(balance) || 0;
 
     try {
       if (walletToEdit) {
@@ -155,13 +157,10 @@ export function WalletModal({
             <Label htmlFor="wallet-balance">
               {walletToEdit ? "Saldo Saat Ini (Rp)" : "Saldo Awal (Rp)"}
             </Label>
-            <Input
+            <AmountInput
               id="wallet-balance"
-              type="number"
-              step="any"
-              placeholder="0"
               value={balance}
-              onChange={(e) => setBalance(e.target.value)}
+              onValueChange={setBalance}
               required
             />
           </div>

@@ -12,6 +12,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AmountInput } from "@/components/ui/amount-input";
+import { formatAmountNumber, parseAmountInput } from "@/lib/format";
 import {
   Select,
   SelectContent,
@@ -63,7 +65,7 @@ export function TransactionModal({
     if (open) {
       if (transactionToEdit) {
         setType(transactionToEdit.type);
-        setAmount(String(transactionToEdit.amount));
+        setAmount(formatAmountNumber(transactionToEdit.amount));
         setWalletId(transactionToEdit.walletId);
         setDestinationWalletId(transactionToEdit.destinationWalletId || "");
         setCategoryId(transactionToEdit.categoryId || "");
@@ -153,7 +155,7 @@ export function TransactionModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseFloat(amount.replace(/[^0-9.]/g, ""));
+    const numAmount = parseAmountInput(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       return;
     }
@@ -243,22 +245,14 @@ export function TransactionModal({
           {/* Amount Field */}
           <div className="space-y-1.5">
             <Label htmlFor="amount">Nominal (Rp)</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-2 text-sm font-semibold text-muted-foreground">
-                Rp
-              </span>
-              <Input
-                id="amount"
-                type="number"
-                step="any"
-                placeholder="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="pl-10 text-lg font-bold"
-                required
-                autoFocus
-              />
-            </div>
+            <AmountInput
+              id="amount"
+              value={amount}
+              onValueChange={setAmount}
+              className="text-lg font-bold"
+              required
+              autoFocus
+            />
           </div>
 
           {/* Wallet Selection */}

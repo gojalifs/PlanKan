@@ -189,7 +189,7 @@ export function BudgetPeriodOverrideModal({ open, onOpenChange, budgetMonth, bud
           </div>
         </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
+        <DialogFooter className="flex-col sm:flex-row">
           {currentOverride && (
             <Button
               variant="outline"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera } from "lucide-react";
+import { ScanText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useReceipt } from "@/lib/hooks/use-receipt";
 import { ReceiptUpload } from "@/lib/receipt";
@@ -70,7 +70,7 @@ export function ReceiptFlow() {
           className="fixed bottom-5 right-5 z-[60] h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/25"
           aria-label="Foto struk untuk catat banyak transaksi"
         >
-          <Camera className="h-6 w-6" />
+          <ScanText className="h-6 w-6" />
         </Button>
       )}
 

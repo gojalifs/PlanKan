@@ -74,6 +74,9 @@ export function useTransactions(filters?: TransactionFilters) {
       attachmentFile?: File | null;
       /** Skip the per-row success toast (multi-receipt saves). */
       silent?: boolean;
+      /** Client-chosen key making saves idempotent: retries reuse it so the
+       * server returns the already-created row instead of duplicating. */
+      idempotencyKey?: string;
     }) => {
       // If there is a file, use multipart/form-data
       if (data.attachmentFile) {
@@ -85,6 +88,7 @@ export function useTransactions(filters?: TransactionFilters) {
         formData.append('amount', data.amount.toString());
         if (data.date) formData.append('date', data.date);
         if (data.note) formData.append('note', data.note);
+        if (data.idempotencyKey) formData.append('idempotencyKey', data.idempotencyKey);
         formData.append('attachment', data.attachmentFile);
         const res = await fetch('/api/transactions', {
           method: 'POST',

@@ -164,7 +164,7 @@ export function ReceiptUploadDialog({ open, onOpenChange, onUploaded }: ReceiptU
           )}
         </div>
 
-        <DialogFooter className="pt-2">
+        <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
             Batal
           </Button>

@@ -1,122 +1,102 @@
-# 💰 PlanKan - Aplikasi Manajemen Budget & Pengeluaran Harian
+# 💰 PlanKan
 
-**PlanKan** adalah aplikasi manajemen anggaran dan pencatatan keuangan harian modern yang dibangun dengan arsitektur fullstack Next.js App Router, Prisma ORM, PostgreSQL, Better Auth, TanStack Query, dan antarmuka berbasis shadcn/ui & Tailwind CSS.
+Aplikasi pencatatan keuangan & manajemen anggaran harian. Fullstack Next.js (App Router, React 19) dengan PostgreSQL via Prisma 7, autentikasi Better Auth, OCR struk belanja, dan deployment Docker + Traefik.
 
----
-
-## 🚀 Fitur Utama (Phase 1: MVP Core)
-
-- 🔐 **Autentikasi Aman & Cepat (Better Auth)**
-  - Register & Login (Email & Password)
-  - Auto-create dompet default (Kas Tunai & Rekening Bank) dan 15+ kategori Indonesia saat pertama kali mendaftar.
-- 💳 **CRUD Multi-Dompet (Wallets)**
-  - Tambah, ubah, dan hapus berbagai dompet (Rekening Bank, Kas Tunai, E-Wallet, Tabungan, Investasi, dll).
-  - Opsi sembunyikan dompet dari kalkulasi Total Kekayaan.
-  - Pilihan warna kustom dan visual icon.
-- 🏷️ **CRUD Kategori Transaksi (Categories)**
-  - Pengelompokan kategori **Pengeluaran (Expense)** & **Pemasukan (Income)**.
-  - Warna kustom & manajemen kategori.
-- 💸 **Pencatatan Transaksi Manual Terpadu (Transactions)**
-  - **Pemasukan (Income)**: Otomatis menambah saldo dompet tujuan.
-  - **Pengeluaran (Expense)**: Otomatis mengurangi saldo dompet asal.
-  - **Transfer Antar Dompet**: Mengurangi saldo dompet asal dan menambah saldo dompet tujuan dalam satu transaksi atomik.
-  - **Revert & Rollback Aman**: Edit dan hapus transaksi secara otomatis mengoreksi saldo dompet terkait via Prisma Transaction.
-  - **Filter Interaktif**: Filter berdasarkan tipe (Pemasukan/Pengeluaran/Transfer), dompet, kategori, dan rentang tanggal.
-- 📊 **Dashboard Ringkasan Keuangan**
-  - Total Saldo / Kekayaan Bersih (Net Worth).
-  - Pemasukan Bulan Ini, Pengeluaran Bulan Ini, dan Arus Kas Bersih (Cashflow).
-  - Distribusi persentase pengeluaran per kategori.
-  - Riwayat 10 transaksi terbaru.
+**Live**: [budget.twogether.click](https://budget.twogether.click)
 
 ---
 
-## 🛠️ Tech Stack
+## Fitur
 
-- **Framework**: [Next.js](https://nextjs.org) (App Router, React 19)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) Primitives (Radix UI)
-- **Database & ORM**: [PostgreSQL](https://www.postgresql.org/) + [Prisma ORM 7](https://www.prisma.io/) (dengan `@prisma/adapter-pg`)
-- **Authentication**: [Better Auth](https://better-auth.com/)
-- **Server State / Data Fetching**: [TanStack Query v5](https://tanstack.com/query) (React Query)
-- **Form & Validation**: [Zod](https://zod.dev) & [React Hook Form](https://react-hook-form.com/)
-- **Notifications**: [Sonner](https://sonner.emilkowal.ski/)
-- **Icons**: [Lucide React](https://lucide.dev/)
+- **Autentikasi** — register/login email+password (Better Auth); auto-seed dompet default & 15+ kategori Indonesia saat signup.
+- **Multi-Dompet** — kelola dompet (bank, e-wallet, kas tunai, tabungan, investasi) dengan warna & ikon kustom; opsi sembunyikan dari net worth.
+- **Transaksi** — catat pemasukan, pengeluaran, dan transfer antar dompet; saldo terkoreksi otomatis via Prisma transaction.
+- **Budget & Anggaran** — set budget per kategori per periode (bulanan/mingguan), dengan override periode untuk kasus khusus.
+- **Struk / Receipt OCR** — upload foto struk, ekstraksi otomatis melalui OCR, review & konfirmasi sebelum disimpan.
+- **Dashboard** — ringkasan net worth, cashflow bulanan, distribusi pengeluaran per kategori, 10 transaksi terbaru.
+- **Filter & Pencarian** — filter transaksi berdasarkan tipe, dompet, kategori, dan rentang tanggal.
 
 ---
 
-## 📂 Struktur Proyek
+## Tech Stack
+
+| Layer | Teknologi |
+|---|---|
+| Framework | Next.js 16 (App Router) + React 19 |
+| Styling | Tailwind CSS v4 + shadcn/ui (Radix UI) |
+| Database | PostgreSQL + Prisma ORM 7 (`@prisma/adapter-pg`) |
+| Auth | Better Auth |
+| State / Fetching | TanStack Query v5 |
+| Form & Validation | React Hook Form + Zod |
+| Object Storage | MinIO (upload struk) |
+| Icons | Lucide React |
+| Notifications | Sonner |
+
+---
+
+## Struktur Proyek
 
 ```
-plan-kan/
-├── app/
-│   ├── (auth)/
-│   │   ├── login/page.tsx        # Halaman Login
-│   │   └── register/page.tsx     # Halaman Register
-│   ├── api/
-│   │   ├── auth/[...all]/        # Better Auth API Handler
-│   │   ├── wallets/              # GET & POST Wallets
-│   │   ├── wallets/[id]/         # GET, PUT & DELETE Wallet
-│   │   ├── categories/           # GET & POST Categories
-│   │   ├── categories/[id]/      # PUT & DELETE Category
-│   │   ├── transactions/         # GET & POST Transactions
-│   │   ├── transactions/[id]/    # GET, PUT & DELETE Transaction
-│   │   └── summary/              # GET Dashboard Summary Metrics
-│   ├── wallets/page.tsx          # Manajemen Dompet
-│   ├── categories/page.tsx       # Manajemen Kategori
-│   ├── transactions/page.tsx     # Riwayat & Filter Transaksi
-│   ├── layout.tsx                # Root Layout + Providers + Navbar
-│   ├── page.tsx                  # Landing Hero / Dashboard
-│   └── globals.css               # Theme & Tailwind Tokens
-├── components/
-│   ├── layout/navbar.tsx         # Navbar responsif
-│   ├── providers/                # TanStack Query Provider
-│   ├── transactions/             # Modal Catat & Edit Transaksi
-│   ├── wallets/                  # Modal Tambah & Edit Dompet
-│   ├── categories/               # Modal Tambah & Edit Kategori
-│   └── ui/                       # shadcn/ui primitives
-├── lib/
-│   ├── auth.ts                   # Konfigurasi Server Better Auth
-│   ├── auth-client.ts            # Client SDK Better Auth
-│   ├── auth-server.ts            # Server session helpers
-│   ├── prisma.ts                 # Prisma Client Singleton + Driver Adapter
-│   ├── default-categories.ts     # Data kategori default & auto-seed
-│   ├── utils.ts                  # Currency & Date Formatters, `cn`
-│   └── hooks/                    # Custom TanStack Query Hooks
-├── prisma/
-│   ├── schema.prisma             # Schema PostgreSQL
-│   └── seed.ts                   # Seeding akun & data dummy
-└── prisma.config.ts              # Konfigurasi Prisma 7
+app/
+  (auth)/login, register      # Halaman autentikasi
+  api/
+    auth/                      # Better Auth handler
+    wallets/, categories/      # CRUD dompet & kategori
+    transactions/              # CRUD transaksi
+    budgets/, budget-period/    # Budget & override periode
+    receipts/                  # Upload & OCR struk
+    reports/                   # Laporan
+    summary/                   # Metrik dashboard
+  wallets/, categories/,
+  transactions/, budgets/      # Halaman UI
+components/                    # Modal transaksi, dompet, kategori, budget, receipt, UI primitif
+lib/                           # Auth, prisma client, hooks, formatters, receipt OCR pipeline
+prisma/schema.prisma           # Database schema
 ```
 
 ---
 
-## ⚙️ Cara Menjalankan
+## Jalankan
 
-### 1. Setup Environment
-Pastikan file `.env` sudah terkonfigurasi dengan connection string PostgreSQL dan secret Better Auth:
-```env
-DATABASE_URL="postgresql://<user>:<password>@<host>:<port>/plankan"
-BETTER_AUTH_SECRET="your-super-secret-key-at-least-32-chars-long"
-BETTER_AUTH_URL="http://localhost:3000"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-```
+### Prasyarat
+- Node.js ≥ 18, pnpm
+- PostgreSQL
+- MinIO (opsional, untuk upload struk)
 
-### 2. Sinkronisasi Database & Generate Client
+### Development
+
 ```bash
+# 1. Install dependencies
+pnpm install
+
+# 2. Setup env
+cp .env.example .env   # isi DATABASE_URL, BETTER_AUTH_SECRET, MINIO_*, dll
+
+# 3. Push schema & generate client
 npx prisma db push
 npx prisma generate
-```
 
-### 3. (Opsional) Seeding Data Demo
-```bash
+# 4. (Opsional) Seed data demo — email: demo@plankan.app, password: password123
 pnpm seed
-```
-> **Akun Demo Bawaan:**
-> - Email: `demo@plankan.app`
-> - Password: `password123`
 
-### 4. Jalankan Development Server
-```bash
+# 5. Jalankan dev server
 pnpm dev
+# → http://localhost:3000
 ```
-Buka browser di [http://localhost:3000](http://localhost:3000).
+
+### Production (Docker)
+
+```bash
+docker compose up -d
+```
+
+Traefik reverse-proxy sudah terkonfigurasi di `docker-compose.yml` (domain `budget.twogether.click`).
+
+---
+
+## Backup Database
+
+```bash
+pg_dump plankan > .backups/plankan-YYYYMMDD-HHMMSS.sql
+```
 

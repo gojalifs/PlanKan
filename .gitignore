@@ -46,3 +46,6 @@ next-env.d.ts
 
 # local temp receipt uploads
 /.tmp/
+
+# database backups
+/.backups/

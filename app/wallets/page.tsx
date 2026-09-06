@@ -338,7 +338,7 @@ export default function WalletsPage() {
               ? Riwayat transaksi yang terhubung dengan dompet ini juga akan terhapus.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+          <DialogFooter className="pt-2">
             <Button
               variant="outline"
               onClick={() => setWalletToDelete(null)}

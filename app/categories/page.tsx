@@ -355,7 +355,7 @@ export default function CategoriesPage() {
               Transaksi terkait akan tetap tersimpan tanpa kategori.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+          <DialogFooter className="pt-2">
             <Button
               variant="outline"
               onClick={() => setCategoryToDelete(null)}

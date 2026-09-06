@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { AmountInput } from "@/components/ui/amount-input";
+import { formatAmountNumber, parseAmountInput } from "@/lib/format";
 import { useWallets } from "@/lib/hooks/use-wallets";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useTransactions } from "@/lib/hooks/use-transactions";
@@ -72,18 +74,20 @@ export function ReceiptTransactionsModal({
   const [isSaving, setIsSaving] = useState(false);
   const [hasStartedSaving, setHasStartedSaving] = useState(false);
 
-  // Seed rows + shared fields each time the dialog opens with a receipt
+  // Seed rows + shared fields each time the dialog opens with a receipt.
+  // Date comes from the receipt's transaction date; today is only the
+  // fallback when the OCR found no date.
   useEffect(() => {
     if (open && receipt) {
       setWalletId((w) => w || wallets[0]?.id || "");
-      setDate(new Date().toISOString().split("T")[0]);
+      setDate(receipt.transactionDate || new Date().toISOString().split("T")[0]);
       setRows(
         receipt.items.map((item) => ({
           key: item.id,
           itemName: item.name,
           categoryId: item.categoryId ?? "",
           aiSuggested: Boolean(item.categoryId),
-          amount: String(item.lineTotal),
+          amount: formatAmountNumber(item.lineTotal),
           originalPrice: item.originalPrice,
           discount: item.discount,
           note: formatReceiptNote(item),
@@ -111,10 +115,7 @@ export function ReceiptTransactionsModal({
   };
 
   const remainingCount = rows.filter((r) => !r.saved).length;
-  const total = rows.reduce(
-    (acc, r) => acc + (parseFloat(r.amount.replace(/[^0-9.]/g, "")) || 0),
-    0
-  );
+  const total = rows.reduce((acc, r) => acc + (parseAmountInput(r.amount) || 0), 0);
 
   const handleSubmit = async () => {
     if (!walletId) {
@@ -131,32 +132,50 @@ export function ReceiptTransactionsModal({
     let savedCount = 0;
 
     // Sequential: row 0 carries the multipart attachment (lands on the
-    // top-most transaction), the rest go as JSON. No automatic rollback in
-    // v1 — on failure we stop and let the user retry the remaining rows.
+    // top-most transaction), the rest go as JSON. Rows use a stable
+    // idempotency key and a verify-retry, so a save whose response was lost
+    // (but committed) is detected as already-saved instead of duplicated.
+    // Only a genuinely failing row stops the loop for a manual retry.
     for (let i = 0; i < rows.length; i++) {
       if (rows[i].saved) continue;
       const row = rows[i];
-      const numAmount = parseFloat(row.amount.replace(/[^0-9.]/g, ""));
+      const numAmount = parseAmountInput(row.amount);
       if (isNaN(numAmount) || numAmount <= 0) {
         toast.error(`Nominal tidak valid untuk "${row.itemName}"`);
         continue;
       }
+      // Stable key per row: a retry (or the verify-retry below) reuses the
+      // same key, so the server returns the already-created row instead of
+      // duplicating the transaction + wallet balance.
+      const args = {
+        type: "EXPENSE" as const,
+        amount: numAmount,
+        walletId,
+        categoryId: row.categoryId,
+        date,
+        note: row.note,
+        attachmentFile: i === 0 ? attachmentFile : null,
+        idempotencyKey: receipt ? `${receipt.id}:${row.key}` : undefined,
+        silent: true,
+      };
       try {
-        await createTransaction({
-          type: "EXPENSE",
-          amount: numAmount,
-          walletId,
-          categoryId: row.categoryId,
-          date,
-          note: row.note,
-          attachmentFile: i === 0 ? attachmentFile : null,
-          silent: true,
-        });
+        await createTransaction(args);
         savedCount += 1;
         setRows((prev) => prev.map((r, j) => (j === i ? { ...r, saved: true } : r)));
       } catch {
-        // stop on first failure; rows saved so far persist
-        break;
+        // The response may have been lost after the server committed (e.g. a
+        // proxy timeout on a cold request) — the row IS saved. One verify-retry
+        // with the same idempotency key is safe: if it already persisted the
+        // server returns it (alreadySaved), otherwise it creates it now. Only a
+        // genuinely failing row stops the loop.
+        try {
+          await createTransaction(args);
+          savedCount += 1;
+          setRows((prev) => prev.map((r, j) => (j === i ? { ...r, saved: true } : r)));
+        } catch {
+          // stop on second failure; rows saved so far persist
+          break;
+        }
       }
     }
 
@@ -268,11 +287,9 @@ export function ReceiptTransactionsModal({
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Nominal akhir (Rp)</Label>
-                    <Input
-                      type="number"
-                      step="any"
+                    <AmountInput
                       value={row.amount}
-                      onChange={(e) => updateRow(row.key, { amount: e.target.value })}
+                      onValueChange={(v) => updateRow(row.key, { amount: v })}
                       className="h-9 text-sm"
                     />
                     {/* Harga asli + diskon dari OCR — hanya tampilan */}
@@ -320,7 +337,7 @@ export function ReceiptTransactionsModal({
           </div>
         </div>
 
-        <DialogFooter className="pt-2">
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"

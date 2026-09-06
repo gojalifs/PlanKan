@@ -837,7 +837,7 @@ export default function BudgetsPage() {
               ? Riwayat transaksi pengeluaran kategori ini akan tetap aman tersimpan.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+          <DialogFooter className="pt-2">
             <Button
               variant="outline"
               onClick={() => setBudgetToDelete(null)}

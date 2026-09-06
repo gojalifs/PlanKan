@@ -11,6 +11,10 @@ const createTransactionSchema = z.object({
   amount: z.number().positive("Nominal harus lebih besar dari 0"),
   date: z.string().optional(),
   note: z.string().optional().nullable(),
+  // Idempotency key: retries of the same logical save reuse this value, so a
+  // save whose response was lost (proxy timeout after commit) returns the
+  // already-created row instead of duplicating the transaction + balance.
+  idempotencyKey: z.string().optional().nullable(),
 });
 
 export async function GET(request: Request) {
@@ -133,6 +137,7 @@ export async function POST(request: Request) {
       data.amount = parseFloat(formData.get('amount')?.toString() || '0');
       data.date = formData.get('date')?.toString() || undefined;
       data.note = formData.get('note')?.toString() || null;
+      data.idempotencyKey = formData.get('idempotencyKey')?.toString() || null;
       const file = formData.get('attachment');
       if (file && file instanceof File) {
         attachmentFile = file;
@@ -143,6 +148,18 @@ export async function POST(request: Request) {
     }
 
     const validated = createTransactionSchema.parse(data);
+
+    // Idempotency guard: a retry of a save whose response was lost hits the
+    // same key — return the already-created row instead of writing again.
+    if (validated.idempotencyKey) {
+      const existing = await prisma.transaction.findFirst({
+        where: { userId: session.user.id, idempotencyKey: validated.idempotencyKey },
+        include: { wallet: true, destinationWallet: true, category: true },
+      });
+      if (existing) {
+        return NextResponse.json({ transaction: existing, alreadySaved: true }, { status: 200 });
+      }
+    }
 
     const sourceWallet = await prisma.wallet.findFirst({
       where: { id: validated.walletId, userId: session.user.id },
@@ -177,49 +194,68 @@ export async function POST(request: Request) {
 
     const transactionDate = validated.date ? new Date(validated.date) : new Date();
 
-    const created = await prisma.$transaction(async (tx) => {
-      const transaction = await tx.transaction.create({
-        data: {
-          userId: session.user.id,
-          walletId: validated.walletId,
-          destinationWalletId: validated.type === "TRANSFER" ? validated.destinationWalletId : null,
-          categoryId: validated.type !== "TRANSFER" ? validated.categoryId : null,
-          type: validated.type,
-          amount: validated.amount,
-          date: transactionDate,
-          note: validated.note || null,
-          attachmentUrl: attachmentUrl || null,
-        },
-        include: {
-          wallet: true,
-          destinationWallet: true,
-          category: true,
-        },
+    let created;
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        const transaction = await tx.transaction.create({
+          data: {
+            userId: session.user.id,
+            walletId: validated.walletId,
+            destinationWalletId: validated.type === "TRANSFER" ? validated.destinationWalletId : null,
+            categoryId: validated.type !== "TRANSFER" ? validated.categoryId : null,
+            type: validated.type,
+            amount: validated.amount,
+            date: transactionDate,
+            note: validated.note || null,
+            attachmentUrl: attachmentUrl || null,
+            idempotencyKey: validated.idempotencyKey || null,
+          },
+          include: {
+            wallet: true,
+            destinationWallet: true,
+            category: true,
+          },
+        });
+
+        if (validated.type === "EXPENSE") {
+          await tx.wallet.update({
+            where: { id: validated.walletId },
+            data: { balance: { decrement: validated.amount } },
+          });
+        } else if (validated.type === "INCOME") {
+          await tx.wallet.update({
+            where: { id: validated.walletId },
+            data: { balance: { increment: validated.amount } },
+          });
+        } else if (validated.type === "TRANSFER" && validated.destinationWalletId) {
+          await tx.wallet.update({
+            where: { id: validated.walletId },
+            data: { balance: { decrement: validated.amount } },
+          });
+          await tx.wallet.update({
+            where: { id: validated.destinationWalletId },
+            data: { balance: { increment: validated.amount } },
+          });
+        }
+
+        return transaction;
       });
-
-      if (validated.type === "EXPENSE") {
-        await tx.wallet.update({
-          where: { id: validated.walletId },
-          data: { balance: { decrement: validated.amount } },
+    } catch (txError: any) {
+      // P2002 on idempotencyKey: a concurrent request with the same key won
+      // the create (its $transaction committed). Its $transaction, including
+      // the balance update, was rolled back — return the winning row so the
+      // caller treats this save as done and never duplicates.
+      if (txError?.code === "P2002" && validated.idempotencyKey) {
+        const existing = await prisma.transaction.findFirst({
+          where: { userId: session.user.id, idempotencyKey: validated.idempotencyKey },
+          include: { wallet: true, destinationWallet: true, category: true },
         });
-      } else if (validated.type === "INCOME") {
-        await tx.wallet.update({
-          where: { id: validated.walletId },
-          data: { balance: { increment: validated.amount } },
-        });
-      } else if (validated.type === "TRANSFER" && validated.destinationWalletId) {
-        await tx.wallet.update({
-          where: { id: validated.walletId },
-          data: { balance: { decrement: validated.amount } },
-        });
-        await tx.wallet.update({
-          where: { id: validated.destinationWalletId },
-          data: { balance: { increment: validated.amount } },
-        });
+        if (existing) {
+          return NextResponse.json({ transaction: existing, alreadySaved: true }, { status: 200 });
+        }
       }
-
-      return transaction;
-    });
+      throw txError;
+    }
 
     return NextResponse.json({ transaction: created }, { status: 201 });
   } catch (error: any) {

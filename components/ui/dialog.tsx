@@ -2,14 +2,62 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVisualViewport } from "@/lib/hooks/use-visual-viewport";
 
-const Dialog = DialogPrimitive.Root;
+const DialogContext = React.createContext<boolean>(false);
+
+/**
+ * Wrapper around Radix's Root that also exposes the `open` state via context
+ * so `DialogContent` can drive framer-motion's enter/exit animations while
+ * Radix still owns focus trap / keyboard behaviour.
+ */
+function Dialog({
+  open,
+  onOpenChange,
+  children,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  return (
+    <DialogContext.Provider value={open === true}>
+      <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} {...props}>
+        {children}
+      </DialogPrimitive.Root>
+    </DialogContext.Provider>
+  );
+}
+Dialog.displayName = "Dialog";
+
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogPortal = DialogPrimitive.Portal;
 const DialogClose = DialogPrimitive.Close;
+
+// Overlay: gentle fade only — keep it subtle so it never steals focus.
+const overlayMotion = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.2, ease: "easeOut" },
+} as const;
+
+// Content: fade + tiny rise + scale. A light spring on enter gives a
+// "settling in" feel; exit is a quick, snappy contract.
+const contentMotion = {
+  enter: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: "spring", damping: 26, stiffness: 320, mass: 0.9 },
+  },
+  exit: {
+    opacity: 0,
+    y: 10,
+    scale: 0.97,
+    transition: { duration: 0.15, ease: "easeIn" },
+  },
+} as const;
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
@@ -17,10 +65,7 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn(
-      "fixed inset-0 z-50 bg-black/60 backdrop-blur-xs data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-      className
-    )}
+    className={cn("fixed inset-0 z-50 bg-black/60 backdrop-blur-xs", className)}
     {...props}
   />
 ));
@@ -30,6 +75,7 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
+  const open = React.useContext(DialogContext);
   const vv = useVisualViewport();
 
   // On Android the on-screen keyboard does NOT resize the layout/dynamic
@@ -50,29 +96,43 @@ const DialogContent = React.forwardRef<
       : {};
 
   return (
-    <DialogPortal>
-      <DialogOverlay />
-      {/* The actual visual viewport box, on top of the document */}
-      <div
-        className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={wrapperStyle}
-      >
-        <DialogPrimitive.Content
-          ref={ref}
-          className={cn(
-            "pointer-events-auto relative grid w-full max-w-lg max-h-full gap-4 overflow-y-auto overscroll-contain border bg-background p-6 shadow-xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-            className
-          )}
-          {...props}
-        >
-          {children}
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        </DialogPrimitive.Content>
-      </div>
-    </DialogPortal>
+    <AnimatePresence>
+      {open && (
+        <DialogPortal forceMount>
+          <DialogOverlay forceMount asChild>
+            <motion.div {...overlayMotion} />
+          </DialogOverlay>
+          {/* The actual visual viewport box, on top of the document */}
+          <div
+            className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={wrapperStyle}
+          >
+            <DialogPrimitive.Content
+              ref={ref}
+              forceMount
+              asChild
+              {...props}
+            >
+              <motion.div
+                className={cn(
+                  "pointer-events-auto relative grid w-full max-w-lg max-h-full gap-4 overflow-y-auto overscroll-contain border bg-background p-6 shadow-xl rounded-xl",
+                  className
+                )}
+                initial={{ opacity: 0, y: 16, scale: 0.96 }}
+                animate={contentMotion.enter}
+                exit={contentMotion.exit}
+              >
+                {children}
+                <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close</span>
+                </DialogPrimitive.Close>
+              </motion.div>
+            </DialogPrimitive.Content>
+          </div>
+        </DialogPortal>
+      )}
+    </AnimatePresence>
   );
 });
 DialogContent.displayName = DialogPrimitive.Content.displayName;
@@ -97,7 +157,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
       className
     )}
     {...props}

@@ -40,6 +40,9 @@ export interface ReceiptUpload {
   imageUrl: string;
   /** Original file name, for display. */
   fileName: string;
+  /** Transaction date from the receipt, "YYYY-MM-DD". Empty string when the
+   * OCR could not find a date (modal falls back to today). */
+  transactionDate: string;
   /** Line items extracted by OCR. */
   items: ReceiptItem[];
 }
@@ -51,12 +54,21 @@ export interface ReceiptUpload {
  *
  * "Gula", qty 2, unit "1kg" → "Gula ×2 (1kg)"
  * "Bakso", qty 1, unit null → "Bakso"
+ * Timbangan (satuan berat telanjang): "JERUK CLEMENVILLE", qty 810, unit "g"
+ * → "JERUK CLEMENVILLE 810 g"; qty 0.81, unit "kg" → "JERUK CLEMENVILLE 0,81 kg"
  */
+const WEIGHT_UNIT = /^(g|gr|gram|kg|kilo|kilogram|l|liter|ml|cc|100g|ons|oz)$/i;
+
 export function formatReceiptNote(item: ReceiptItem): string {
+  const unit = item.unit?.trim() ?? "";
+  // Barang yang dijual per takaran/berat: render qty langsung dengan satuan,
+  // jangan "×810 (g)" (bacanya seperti 810 pcs).
+  if (WEIGHT_UNIT.test(unit) && item.qty > 0) {
+    const qty = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 3 }).format(item.qty);
+    return `${item.name} ${qty} ${unit}`;
+  }
   const detail: string[] = [];
   if (item.qty > 1) detail.push(`×${item.qty}`);
-  if (item.unit) {
-    detail.push(item.unit.startsWith("(") ? item.unit : `(${item.unit})`);
-  }
+  if (unit) detail.push(unit.startsWith("(") ? unit : `(${unit})`);
   return detail.length ? `${item.name} ${detail.join(" ")}` : item.name;
 }

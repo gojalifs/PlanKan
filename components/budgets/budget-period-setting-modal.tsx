@@ -160,7 +160,7 @@ export function BudgetPeriodSettingModal({ open, onOpenChange }: Props) {
           </div>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Batal
           </Button>

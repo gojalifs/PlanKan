@@ -27,6 +27,7 @@ import {
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
 import { TransactionDetailDialog } from "@/components/transactions/transaction-detail";
+import { ReceiptFlow } from "@/components/transactions/receipt-flow";
 import type { Transaction } from "@/lib/hooks/use-transactions";
 
 const containerVariants: Variants = {
@@ -563,6 +564,8 @@ export default function HomePage() {
         open={!!txToView}
         onOpenChange={(open) => !open && setTxToView(null)}
       />
+
+      <ReceiptFlow />
     </motion.div>
   );
 }

@@ -45,15 +45,61 @@ function categoryLabel(c: ReceiptCategory): string {
  */
 function buildPrompt(categories: ReceiptCategory[]): string {
   const lines = [
-    "Foto struk belanja. Ekstrak SEMUA baris item ke dalam JSON.",
+"Foto struk belanja. Ekstrak tanggal transaksi dan SEMUA baris item ke JSON.",
+    "",
+    "transactionDate: tanggal transaksi pada struk, format YYYY-MM-DD.",
+    "  Cari tanggal di bagian atas struk (sebelum daftar item), mis. \"31-08-26\",",
+    "  \"31/08/2026\", \"SELASA 31 AGU 2026\", dll. Konversi ke YYYY-MM-DD.",
+    "  Jika tanggal tidak ditemukan, gunakan string kosong \"\".",
+    "",
     "Untuk setiap item:",
-    "- name: nama barang (string)",
-    "- qty: jumlah (angka, default 1 jika tidak tertulis)",
-    '- unit: satuan kemasan seperti "pcs", "1kg", "lusin", atau string kosong jika tidak ada',
-    "- unitPrice: harga SATU satuan dalam Rupiah (angka, SELALU positif)",
-    "- discount: potongan Rupiah yang diberikan pada baris ini (0 jika tidak ada)",
-    "- lineTotal: harga FINAL baris setelah diskon (angka; untuk baris normal = qty × unitPrice − discount)",
+    "- name: nama barang",
+    "- qty: jumlah yang TERTULIS di kolom qty. Jangan diubah, jangan dibulatkan",
+    "  menjadi 1 (mis. berat 810 tetap 810). Baris tanpa qty → 1.",
+    '- unit: satuan qty ("pcs", "1kg", "lusin", "g", "kg", "100g", "l", "ml")',
+    "  atau string kosong bila tidak tercetak.",
+    "- unitPrice: harga per satuan yang TERCETAK dalam Rupiah (selalu positif).",
+    "- discount: potongan Rupiah pada baris item ini (0 jika tidak ada).",
+    "- lineTotal: HARGA AKHIR yang benar-benar dibayar untuk baris ini, dalam",
+    "  Rupiah. Sudah DIKURANGI semua discount (HEMAT/DISK/POT). Dasarnya angka",
+    "  kolom TOTAL / angka terakhir baris yang TERCETAK, lalu kurangi discount.",
     "- categoryName: kategori yang paling cocok untuk item ini (lihat daftar di bawah)",
+    "",
+    "PENTING — BARANG DITIMBANG (sayur/buah/daging/ikan):",
+    "- Struk menulis BERAT barang dan HARGA PER SATUAN BERAT. Contoh (Super Indo):",
+    "  \"JERUK CLEMENVILLE | 810 | 84.900 | 68.770\"  + HEMAT -4.050 di bawah",
+    "  → qty=810, unit=\"g\", unitPrice=84900 (harga per 1 kg), lineTotal=64720",
+    "    (= kolom TOTAL yang TERCETAK 68.770, dikurangi HEMAT 4.050).",
+    "- qty = berat yang tercetak apa adanya; unit = satuan berat yang tercetak",
+    "  (g / kg / 100g). JANGAN mengonversi atau membulatkan beratnya.",
+    "- Kolom TOTAL (68.770) adalah harga SEBELUM diskon = berat × harga per kg.",
+    "  Jangan menghitung ulang qty×unitPrice (skala unitnya beda); baca TOTAL,",
+    "  lalu kurangi HEMAT untuk lineTotal.",
+    "- Kontras: kemasan TETAP (\"Gula 1kg\", \"Beras 5kg\") adalah SATU unit beli:",
+    "  qty = jumlah kemasan (2), unit = \"1kg\", unitPrice = harga per kemasan.",
+    "",
+    "PENTING — HARGA TERCETAK ADALAH HARGA SEBELUM DISKON:",
+    "- Di struk Indonesia, harga satuan (84.900), kolom TOTAL (68.770) dan Sub",
+    "  Total semuanya adalah harga NORMAL SEBELUM diskon. HEMAT/DISK/POT yang",
+    "  tercetak MENGURANGI jumlah yang benar-benar dibayar.",
+    "- lineTotal = harga yang benar-benar dibayar = angka kolom TOTAL DIKURANGI",
+    "  discount. Ada HEMAT di bawah sebuah item → lineTotal SELALU lebih kecil",
+    "  dari kolom TOTAL. Contoh: TOTAL 68.770 + HEMAT -4.050 → lineTotal 64.720.",
+    "- HEMAT/DISK/POT sub-line: gabungkan ke field discount item di atasnya",
+    "  (bukan baris item terpisah). discount = nilai Rupiah positif potongan.",
+    "- Dua harga pada baris yang sama (harga coret vs harga bayar): discount =",
+    "  selisih keduanya; lineTotal = harga bayar yang tercetak (sudah FINAL — itu",
+    "  angka yang dibayar — jangan dikurangi lagi).",
+    "- Tanpa diskon yang tercetak: discount = 0, lineTotal = kolom TOTAL.",
+    "- Baris potongan murni (tanpa nama barang, bernilai negatif, mis. voucher/",
+    "  potongan akhir struk): name=\"Diskon\", lineTotal NEGATIF, mis. -2500.",
+    "- label HEMAT/DISK yang bukan potongan (\"RINGAN\", \"BARU\") → discount=0.",
+    "- JANGAN MENEBAK DISKON: discount=0 kecuali struk benar-benar mencetak",
+    "  HEMAT/DISK/POT, tanda minus (-), atau dua harga berlabel coret.",
+    "",
+    "PENTING — ANGKA:",
+    "- Tulis Rupiah tanpa pemisah ribuan: 84.900 → 84900, 68.770 → 68770, 1.890 → 1890.",
+    "- Tanda minus hanya untuk baris potongan murni.",
     "",
     "PENTING — KATEGORI:",
     "Cocokkan SETIAP item ke SALAH SATU kategori dari daftar user berikut.",
@@ -69,19 +115,6 @@ function buildPrompt(categories: ReceiptCategory[]): string {
   }
 
   lines.push(
-    "PENTING — DOKUMENTASI DISKON:",
-    "- Layout diskon berbeda-beda antar toko. Tangkap diskon dari kolom apapun itu:",
-    "  kolom 'DISK', 'DISC', 'POT', 'potongan', harga coret, atau baris minus.",
-    "- Jangan hilangkan baris diskon/voucher/potongan. Baris yang merupakan potongan murni",
-    "  (tanpa nama barang, bernilai negatif) tampilkan sebagai item dengan name 'Diskon'",
-    "  dan lineTotal NEGATIF, mis. name='Diskon', lineTotal=-2500.",
-    "- Harga yang dicoret/dipotong per barang: masuk ke discount dan lineTotal terkoreksi.",
-    "- lineTotal negatif HANYA untuk baris potongan murni; jangan pernah negatif lainnya.",
-    "- JANGAN MENEBAK DISKON. discount=0 kecuali struk benar-benar menuliskan potongan:",
-    "  kolom DISK/DISC/POT, tanda minus (-), atau dua harga berlabel coret.",
-    "  Harga per satuan berat (kg, L, 100g) yang membuat total baris berbeda dari perkiraan",
-    "  qty×unitPrice BUKAN diskon — itu harga × berat, jadi discount=0 dan lineTotal ikuti",
-    "  angka yang tertulis di struk. Jika ragu, discount=0.",
     "Jika struk buram / tidak terbaca, kembalikan { items: [] }.",
     "Hanya balas dengan JSON, tanpa teks lain."
   );
@@ -91,6 +124,7 @@ function buildPrompt(categories: ReceiptCategory[]): string {
 const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
+    transactionDate: { type: "string" },
     items: {
       type: "array",
       items: {
@@ -116,13 +150,35 @@ interface GeminiInlineImage {
   mimeType: string;
 }
 
-/** Strip currency/whitespace noise and parse a number Gemini gave us. */
+/**
+ * Strip currency/whitespace noise and parse a number Gemini gave us.
+ * Struk Indonesia memakai TITIK pemisah ribuan (84.900 → 84900) dan KOMA
+ * desimal (0,81 → 0.81), jadi tidak bisa asal menghapus semua tanda.
+ */
 function toNumber(value: unknown): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value !== "string") return 0;
-  const cleaned = value.replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".");
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : 0;
+  let s = value.replace(/[^\d.,-]/g, "");
+  const neg = s.startsWith("-");
+  s = s.replace(/-/g, "");
+  const lastDot = s.lastIndexOf(".");
+  const lastComma = s.lastIndexOf(",");
+  let norm: string;
+  if (lastDot !== -1 && lastComma !== -1) {
+    // "84.900,50" / "1,234.56" → pemisah TERAKHIR adalah desimal.
+    norm = lastDot > lastComma ? s.replace(/,/g, "") : s.replace(/\./g, "").replace(",", ".");
+  } else if (lastComma !== -1) {
+    // "0,81" → koma desimal.
+    norm = s.replace(/,/g, ".");
+  } else if (lastDot !== -1) {
+    // "0.81" → titik desimal; "84.900"/"1.890" → titik ribuan (3 digit di belakang).
+    const fracDigits = s.length - lastDot - 1;
+    norm = fracDigits >= 1 && fracDigits <= 2 ? s : s.replace(/\./g, "");
+  } else {
+    norm = s;
+  }
+  const n = Number(norm);
+  return Number.isFinite(n) ? (neg ? -n : n) : 0;
 }
 
 /** Lowercase, trim punctuation/whitespace for forgiving name matching. */
@@ -170,6 +226,17 @@ export function resolveCategoryId(
   return null;
 }
 
+/**
+ * Align a weighable quantity with the scale of `unitPrice` for the no-TOTAL
+ * fallback. Receipts print grams (810) alongside a per-kg price (84.900), so
+ * grams must become kg before multiplying. Non-weight units (kg, 100g, pcs,
+ * volume) already match their printed price scale and pass through unchanged.
+ */
+function weightQty(qty: number, unit: string | null): number {
+  if (/^(g|gr|gram)$/i.test(unit ?? "")) return qty / 1000;
+  return qty;
+}
+
 function toItem(
   raw: unknown,
   index: number,
@@ -177,7 +244,10 @@ function toItem(
 ): ReceiptItem {
   const r = (raw ?? {}) as Record<string, unknown>;
   const name = typeof r.name === "string" && r.name.trim() ? r.name.trim() : `Item ${index + 1}`;
-  const qty = Math.max(1, Math.round(toNumber(r.qty)));
+  const rawQty = toNumber(r.qty);
+  // Jangan bulatkan qty: barang timbangan bisa berupa desimal (0.81 kg) atau
+  // gram utuh (810 g). Hanya jaga agar tidak ≤ 0.
+  const qty = Number.isFinite(rawQty) && rawQty > 0 ? rawQty : 1;
   const unit =
     typeof r.unit === "string" && r.unit.trim() ? r.unit.trim() : null;
   const unitPrice = toNumber(r.unitPrice);
@@ -209,17 +279,17 @@ function toItem(
     };
   }
 
-  // Normal line: lineTotal must reflect the discount as a deduction so the
-  // prefilled form amount is already the discounted price. discount and
-  // originalPrice are carried for display only — never persisted.
+  // Normal line: the model outputs the final amount actually paid — the printed
+  // TOTAL column is pre-discount, so lineTotal already excludes HEMAT/DISK. We
+  // trust that value as the recorded amount; discount stays display-only and
+  // originalPrice = lineTotal + discount reconstructs the pre-discount price.
   const finalLineTotal =
     lineTotal > 0
-      ? // Model-supplied total wins unless it ignored the discount.
-        discount > 0 && lineTotal === qty * unitPrice
-        ? lineTotal - discount
-        : lineTotal
-      : // Missing total: compute from price, applying any discount.
-        qty * unitPrice - discount;
+      ? lineTotal
+      : // TOTAL column unreadable: reconstruct from qty × unitPrice. For weighable
+        // items the printed unitPrice is per weight unit, so align grams to kg
+        // first, then apply the discount.
+        weightQty(qty, unit) * unitPrice - discount;
 
   return {
     id: `it-${index}`,
@@ -265,12 +335,13 @@ function flattenDiscountRows(items: ReceiptItem[]): ReceiptItem[] {
 
 /**
  * Run Gemini vision OCR on a receipt image. Throws on transport/API errors;
- * returns an empty array (not an exception) on an unreadable receipt.
+ * returns an empty item array (not an exception) on an unreadable receipt.
+ * `transactionDate` is "YYYY-MM-DD", or "" when the receipt shows no date.
  */
 export async function extractReceiptItems(
   image: GeminiInlineImage,
   categories: ReceiptCategory[] = []
-): Promise<ReceiptItem[]> {
+): Promise<{ items: ReceiptItem[]; transactionDate: string }> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY belum diset");
 
@@ -325,24 +396,32 @@ export async function extractReceiptItems(
     throw new Error("Gemini mengembalikan JSON tidak valid");
   }
 
-  const items = (parsed as { items?: unknown[] })?.items;
-  if (!Array.isArray(items)) return [];
+  const parsedObj = parsed as { items?: unknown[]; transactionDate?: string };
+  const items = parsedObj?.items;
+  if (!Array.isArray(items)) {
+    // No readable item list — still try to salvage the date.
+    return { items: [], transactionDate: parsedObj?.transactionDate ?? "" };
+  }
 
-  return flattenDiscountRows(items.map((raw, i) => toItem(raw, i, categories)));
+  return {
+    items: flattenDiscountRows(items.map((raw, i) => toItem(raw, i, categories))),
+    transactionDate: parsedObj?.transactionDate ?? "",
+  };
 }
 
 /**
  * Resolve the line items for an uploaded receipt: real Gemini OCR when a key
  * is configured, otherwise the deterministic stub (dev without API key).
+ * `transactionDate` is "YYYY-MM-DD"; the stub has no date so it returns "".
  */
 export async function getReceiptItems(
   image: GeminiInlineImage,
   categories: ReceiptCategory[] = []
-): Promise<{ items: ReceiptItem[]; source: "gemini" | "stub" }> {
+): Promise<{ items: ReceiptItem[]; source: "gemini" | "stub"; transactionDate: string }> {
   if (!hasGeminiKey()) {
     console.warn("[receipt] GEMINI_API_KEY belum diset — memakai item stub");
-    return { items: getReceiptStub(), source: "stub" };
+    return { items: getReceiptStub(), source: "stub", transactionDate: "" };
   }
-  const items = await extractReceiptItems(image, categories);
-  return { items, source: "gemini" };
+  const { items, transactionDate } = await extractReceiptItems(image, categories);
+  return { items, source: "gemini", transactionDate };
 }

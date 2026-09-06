@@ -9,8 +9,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AmountInput } from "@/components/ui/amount-input";
+import { formatAmountNumber, parseAmountInput } from "@/lib/format";
 import { CategorySelect } from "@/components/categories/category-select";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useBudgets, BudgetItem, SubBudgetItem } from "@/lib/hooks/use-budgets";
@@ -39,7 +40,7 @@ export function BudgetModal({
   useEffect(() => {
     if (budgetItem) {
       setCategoryId(budgetItem.categoryId);
-      setAmount(budgetItem.budgetAmount > 0 ? String(budgetItem.budgetAmount) : "");
+      setAmount(budgetItem.budgetAmount > 0 ? formatAmountNumber(budgetItem.budgetAmount) : "");
     } else if (defaultCategoryId) {
       setCategoryId(defaultCategoryId);
       setAmount("");
@@ -53,7 +54,7 @@ export function BudgetModal({
     e.preventDefault();
     if (!categoryId) return;
 
-    const numAmount = parseFloat(amount.replace(/[^0-9.]/g, ""));
+    const numAmount = parseAmountInput(amount);
     if (isNaN(numAmount) || numAmount <= 0) return;
 
     try {
@@ -68,6 +69,8 @@ export function BudgetModal({
   };
 
   const quickAmounts = [250000, 500000, 1000000, 2000000, 5000000];
+
+  const parsedAmount = parseAmountInput(amount);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -131,25 +134,17 @@ export function BudgetModal({
             <Label htmlFor="budget-amount" className="text-xs">
               Batas Anggaran Bulanan (Rp)
             </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-2.5 text-sm font-semibold text-muted-foreground">
-                Rp
-              </span>
-              <Input
-                id="budget-amount"
-                type="number"
-                step="any"
-                placeholder="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="pl-10 text-lg font-bold h-11"
-                required
-                autoFocus
-              />
-            </div>
-            {amount && !isNaN(Number(amount)) && Number(amount) > 0 && (
+            <AmountInput
+              id="budget-amount"
+              value={amount}
+              onValueChange={setAmount}
+              className="text-lg font-bold h-11"
+              required
+              autoFocus
+            />
+            {!isNaN(parsedAmount) && parsedAmount > 0 && (
               <p className="text-xs text-primary font-medium mt-1">
-                {formatRupiah(Number(amount))} per bulan
+                {formatRupiah(parsedAmount)} per bulan
               </p>
             )}
           </div>
@@ -162,7 +157,7 @@ export function BudgetModal({
                 <button
                   key={q}
                   type="button"
-                  onClick={() => setAmount(String(q))}
+                  onClick={() => setAmount(formatAmountNumber(q))}
                   className="px-2.5 py-1 text-xs rounded-md border border-border/80 bg-muted/30 hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-all"
                 >
                   {formatRupiah(q)}
