@@ -34,7 +34,27 @@ export default function LoginPage() {
       });
 
       if (res?.error) {
-        toast.error(res.error.message || "Email atau password salah");
+        if (res.error.code === "EMAIL_NOT_VERIFIED" || res.error.message?.toLowerCase()?.includes("not verified")) {
+          toast.error("Email belum diverifikasi. Silakan cek inbox Anda untuk link verifikasi.", {
+            action: {
+              label: "Kirim Ulang",
+              onClick: async () => {
+                try {
+                  await fetch(`${window.location.origin}/api/auth/send-verification-email`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email }),
+                  });
+                  toast.success("Email verifikasi baru telah dikirim!");
+                } catch {
+                  toast.error("Gagal mengirim email verifikasi");
+                }
+              },
+            },
+          });
+        } else {
+          toast.error(res.error.message || "Email atau password salah");
+        }
       } else {
         toast.success("Berhasil masuk!");
         router.push("/");

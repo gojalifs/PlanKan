@@ -30,6 +30,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
+    requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
       await transporter.sendMail({
         from: process.env.SMTP_FROM || "PlanKan <no-reply@budget.twogether.click>",
@@ -49,6 +50,37 @@ export const auth = betterAuth({
             </a>
             <p style="color: #94a3b8; font-size: 13px; line-height: 1.6;">
               Link ini akan kedaluwarsa dalam 1 jam. Jika Anda tidak meminta reset password, abaikan email ini.
+            </p>
+          </div>
+        `,
+      });
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    sendOnSignIn: true,
+    expiresIn: 3600,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      const verifyUrl = url.replace(
+        /callbackURL=[^&]*/,
+        `callbackURL=${encodeURIComponent("/email-verified")}`
+      );
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || "PlanKan <no-reply@budget.twogether.click>",
+        to: user.email,
+        subject: "Verifikasi Email - PlanKan",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #0f172a;">Halo ${user.name},</h2>
+            <p style="color: #475569; line-height: 1.6;">
+              Selamat datang di PlanKan! Silakan verifikasi email Anda dengan mengklik tombol di bawah:
+            </p>
+            <a href="${verifyUrl}" style="display: inline-block; background-color: #0ea5e9; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; margin: 16px 0;">
+              Verifikasi Email
+            </a>
+            <p style="color: #94a3b8; font-size: 13px; line-height: 1.6;">
+              Link ini akan kedaluwarsa dalam 1 jam. Jika Anda tidak mendaftar di PlanKan, abaikan email ini.
             </p>
           </div>
         `,

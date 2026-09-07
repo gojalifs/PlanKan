@@ -10,6 +10,8 @@ Aplikasi pencatatan keuangan & manajemen anggaran harian. Fullstack Next.js (App
 
 ### 🔐 Autentikasi (Better Auth)
 - Register & login **email + password**.
+- **Login dengan Google** — social login via OAuth 2.0 (otentikasi terpisah dari password).
+- **Verifikasi email wajib** — user harus klik link verifikasi sebelum bisa login. Email verifikasi dikirim otomatis saat daftar & saat login gagal karena belum terverifikasi.
 - **Reset password via email** (SMTP/Nodemailer) — tombol "Lupa password" mengirim link reset.
 - **Auto-seed data awal** saat user pertama kali mendaftar:
   - 2 dompet default: **Dompet Utama (Cash)** dan **Rekening Bank**.
@@ -77,7 +79,7 @@ Aplikasi pencatatan keuangan & manajemen anggaran harian. Fullstack Next.js (App
 | Framework | Next.js 16 (App Router) + React 19 |
 | Styling | Tailwind CSS v4 + shadcn/ui (Radix UI) |
 | Database | PostgreSQL + Prisma ORM 7 (`@prisma/adapter-pg`, Decimal `15,2`) |
-| Auth | Better Auth |
+| Auth | Better Auth (email/password + Google OAuth, email verification) |
 | State / Data | TanStack Query v5, React Query Hooks |
 | Form & Validation | React Hook Form + Zod |
 | OCR Struk | Google Gemini Vision API (`generateContent` + `responseSchema`) |
@@ -108,6 +110,10 @@ app/
 ├── categories/, wallets/      # Manajemen kategori & dompet
 ├── reports/                   # Laporan bulanan (charts)
 ├── transactions/              # Riwayat + filter + pagination
+├── verify-email/              # Redirect route → /api/auth/verify-email
+├── email-verified/            # Halaman sukses verifikasi email
+├── privacy/                   # Kebijakan Privasi (publik)
+├── terms/                     # Syarat & Ketentuan (publik)
 └── page.tsx                   # Dashboard
 components/
 ├── dashboard/                 # Kartu ringkasan & breakdown
@@ -116,7 +122,7 @@ components/
 ├── wallets/, categories/      # Modal CRUD
 └── ui/                        # primitives shadcn/ui
 lib/
-├── auth.ts / auth-client.ts   # Konfigurasi server & client Better Auth
+├── auth.ts / auth-client.ts   # Konfigurasi server & client Better Auth (social login, email verification)
 ├── prisma.ts                  # Prisma Client singleton (driver adapter pg)
 ├── receipt-ocr.ts             # Pipeline OCR Gemini + parser toleran
 ├── receipt-storage.ts         # Temp-file store & sweeper TTL
@@ -179,7 +185,8 @@ docker compose up -d
 | `DATABASE_URL` | Connection string PostgreSQL |
 | `BETTER_AUTH_SECRET` | Secret kunci Better Auth (≥ 32 karakter) |
 | `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` | Basis URL aplikasi |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | SMTP untuk reset password |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | SMTP untuk reset password & verifikasi email |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth 2.0 credentials dari Google Cloud Console (untuk login dengan Google) |
 | `MINIO_ENDPOINT` / `MINIO_PORT` | Alamat & port MinIO |
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | Kredensial MinIO |
 | `MINIO_BUCKET` | Nama bucket lampiran (default `transactions`) |
