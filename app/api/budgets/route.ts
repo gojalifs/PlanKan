@@ -3,9 +3,10 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveBudgetPeriod } from "@/lib/budget-period";
+import { withMonitoring } from "@/lib/monitoring";
 
 // GET /api/budgets?month=8&year=2026
-export async function GET(req: NextRequest) {
+async function GETHandler(req: NextRequest) {
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
@@ -201,7 +202,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/budgets
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
@@ -272,3 +273,6 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const GET = withMonitoring("budgets", GETHandler);
+export const POST = withMonitoring("budgets", POSTHandler);

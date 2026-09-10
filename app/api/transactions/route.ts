@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { z } from "zod";
+import { withMonitoring } from "@/lib/monitoring";
 
 const createTransactionSchema = z.object({
   walletId: z.string().min(1, "Dompet asal wajib dipilih"),
@@ -17,7 +18,7 @@ const createTransactionSchema = z.object({
   idempotencyKey: z.string().optional().nullable(),
 });
 
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   try {
     const session = await getServerSession();
     if (!session?.user) {
@@ -116,7 +117,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const session = await getServerSession();
     if (!session?.user) {
@@ -266,3 +267,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
 }
+
+export const GET = withMonitoring("transactions", GETHandler);
+export const POST = withMonitoring("transactions", POSTHandler);

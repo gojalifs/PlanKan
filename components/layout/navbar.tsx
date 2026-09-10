@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
+import { useMonitoringAccess } from "@/lib/hooks/use-monitoring-access";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,6 +27,7 @@ import {
   Menu,
   X,
   BarChart3,
+  Activity,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
@@ -34,17 +36,23 @@ export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, isPending } = useSession();
+  const { data: monitoringAccess } = useMonitoringAccess();
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Monitoring is admin-only: hide the link until access is confirmed,
+  // then keep it hidden for non-admins.
+  const canMonitor = monitoringAccess?.canAccess ?? false;
 
   const navItems = [
     { label: "Dashboard", href: "/", icon: LayoutDashboard },
     { label: "Transaksi", href: "/transactions", icon: ArrowLeftRight },
     { label: "Budget", href: "/budgets", icon: Target },
     { label: "Laporan", href: "/reports", icon: BarChart3 },
+    { label: "Monitoring", href: "/monitoring", icon: Activity },
     { label: "Dompet", href: "/wallets", icon: Wallet },
     { label: "Kategori", href: "/categories", icon: Tags },
-  ];
+  ].filter((item) => item.href !== "/monitoring" || canMonitor);
 
   const handleSignOut = async () => {
     await signOut();

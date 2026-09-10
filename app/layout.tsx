@@ -18,6 +18,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PlanKan - Manajemen Budget & Pengeluaran Sehari-hari",
   description: "Aplikasi pencatatan keuangan, dompet, kategori, dan arus kas harian terpadu.",
+  icons: {
+    icon: "/plankan-logo-120.png",
+    shortcut: "/plankan-logo-120.png",
+    apple: "/plankan-logo-512.png",
+  },
 };
 
 export default function RootLayout({

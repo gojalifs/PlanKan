@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { ensureUserStarterData } from "@/lib/default-categories";
+import { withMonitoring } from "@/lib/monitoring";
 
-export async function GET() {
+async function GETHandler() {
   try {
     const session = await getServerSession();
     if (!session?.user) {
@@ -95,3 +96,5 @@ export async function GET() {
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
 }
+
+export const GET = withMonitoring("summary", GETHandler);

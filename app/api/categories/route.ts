@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { ensureUserStarterData } from "@/lib/default-categories";
 import { z } from "zod";
+import { withMonitoring } from "@/lib/monitoring";
 
 const createCategorySchema = z.object({
   name: z.string().min(1, "Nama kategori wajib diisi"),
@@ -12,7 +13,7 @@ const createCategorySchema = z.object({
   color: z.string().default("#64748b"),
 });
 
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   try {
     const session = await getServerSession();
     if (!session?.user) {
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const session = await getServerSession();
     if (!session?.user) {
@@ -101,3 +102,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
 }
+
+export const GET = withMonitoring("categories", GETHandler);
+export const POST = withMonitoring("categories", POSTHandler);

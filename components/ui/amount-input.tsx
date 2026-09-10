@@ -42,7 +42,7 @@ export function AmountInput({
         autoComplete="off"
         placeholder="0"
         value={value}
-        onChange={(e) => onValueChange(formatAmountInput(e.target.value))}
+        onChange={(e) => onValueChange(formatAmountInput(e.target.value, value))}
         className={cn("pl-10 font-bold", className)}
         {...props}
       />

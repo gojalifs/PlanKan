@@ -5,6 +5,7 @@ import { ensureUserStarterData } from "@/lib/default-categories";
 import { saveReceiptFile, cleanupStaleReceipts, readReceiptFile } from "@/lib/receipt-storage";
 import { getReceiptItems, type ReceiptCategory } from "@/lib/receipt-ocr";
 import type { ReceiptItem } from "@/lib/receipt";
+import { withMonitoring } from "@/lib/monitoring";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -12,7 +13,7 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 // Saves the receipt image to a local temp dir (NOT MinIO) and returns the
 // receipt contract with line items extracted by Gemini vision OCR. Without a
 // GEMINI_API_KEY it falls back to the deterministic stub (dev).
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const session = await getServerSession();
     if (!session?.user) {
@@ -84,3 +85,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || "Gagal mengunggah struk" }, { status: 500 });
   }
 }
+
+export const POST = withMonitoring("receipts", POSTHandler);

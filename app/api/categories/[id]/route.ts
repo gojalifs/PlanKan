@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { z } from "zod";
+import { withMonitoring } from "@/lib/monitoring";
 
 const updateCategorySchema = z.object({
   name: z.string().min(1).optional(),
@@ -11,7 +12,7 @@ const updateCategorySchema = z.object({
   color: z.string().optional(),
 });
 
-export async function PUT(
+async function PUTHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -69,7 +70,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
+async function DELETEHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -97,3 +98,6 @@ export async function DELETE(
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
 }
+
+export const PUT = withMonitoring("categories/[id]", PUTHandler);
+export const DELETE = withMonitoring("categories/[id]", DELETEHandler);

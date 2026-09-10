@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { withMonitoring } from "@/lib/monitoring";
 
 // GET /api/budget-period/setting
-export async function GET() {
+async function GETHandler() {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user?.id) {
@@ -28,7 +29,7 @@ export async function GET() {
 
 // PUT /api/budget-period/setting
 // Body: { method: "LAST_WORKING_DAY" | "FIXED_DAY", fixedDay?: number }
-export async function PUT(req: NextRequest) {
+async function PUTHandler(req: NextRequest) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user?.id) {
@@ -71,3 +72,6 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export const GET = withMonitoring("budget-period/setting", GETHandler);
+export const PUT = withMonitoring("budget-period/setting", PUTHandler);

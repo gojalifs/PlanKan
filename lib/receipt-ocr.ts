@@ -1,5 +1,7 @@
 import { ReceiptItem } from "@/lib/receipt";
 import { getReceiptStub } from "@/lib/receipt-stub";
+import { geminiCost, fallbackCostPerRequest } from "@/lib/monitoring";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Gemini Vision OCR for receipt photos.
@@ -34,7 +36,7 @@ export interface ReceiptCategory {
 }
 
 /** Human-readable label for a category in the prompt ("Parent > Child"). */
-function categoryLabel(c: ReceiptCategory): string {
+export function categoryLabel(c: ReceiptCategory): string {
   return c.parentName ? `${c.parentName} > ${c.name}` : c.name;
 }
 
@@ -333,10 +335,34 @@ function flattenDiscountRows(items: ReceiptItem[]): ReceiptItem[] {
   return kept;
 }
 
+function monitoringEnabled(): boolean {
+  return process.env.MONITORING_ENABLED !== "false";
+}
+
+/** Fire-and-forget write of one GeminiCallLog row (best-effort). */
+export async function logGeminiCall(data: {
+  model: string;
+  success: boolean;
+  statusCode: number | null;
+  durationMs: number;
+  promptTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  errorMessage?: string | null;
+}) {
+  try {
+    await prisma.geminiCallLog.create({ data });
+  } catch {
+    // never block the OCR flow on a monitoring write
+  }
+}
+
 /**
  * Run Gemini vision OCR on a receipt image. Throws on transport/API errors;
  * returns an empty item array (not an exception) on an unreadable receipt.
  * `transactionDate` is "YYYY-MM-DD", or "" when the receipt shows no date.
+ * Each Gemini call is logged to GeminiCallLog for AI cost tracking.
  */
 export async function extractReceiptItems(
   image: GeminiInlineImage,
@@ -346,48 +372,102 @@ export async function extractReceiptItems(
   if (!apiKey) throw new Error("GEMINI_API_KEY belum diset");
 
   const url = `${GEMINI_BASE_URL}/${geminiModel()}:generateContent`;
+  const model = geminiModel();
+  const start = performance.now();
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: buildPrompt(categories) },
-            {
-              inline_data: {
-                mime_type: image.mimeType,
-                data: image.data.toString("base64"),
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
+  let res: Response | null = null;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
-    }),
-    signal: AbortSignal.timeout(45_000),
-  });
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: buildPrompt(categories) },
+              {
+                inline_data: {
+                  mime_type: image.mimeType,
+                  data: image.data.toString("base64"),
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
+        },
+      }),
+      signal: AbortSignal.timeout(45_000),
+    });
 
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Gemini API ${res.status}: ${detail.slice(0, 300)}`);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      const err = new Error(`Gemini API ${res.status}: ${detail.slice(0, 300)}`);
+      (err as Error & { status?: number }).status = res.status;
+      throw err;
+    }
+
+    const json = (await res.json()) as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+      }>;
+      usageMetadata?: {
+        promptTokenCount?: number;
+        candidatesTokenCount?: number;
+        totalTokenCount?: number;
+      };
+    };
+
+    const prompt = json.usageMetadata?.promptTokenCount ?? 0;
+    const output = json.usageMetadata?.candidatesTokenCount ?? 0;
+    const total = json.usageMetadata?.totalTokenCount ?? prompt + output;
+    if (monitoringEnabled()) {
+      logGeminiCall({
+        model,
+        success: true,
+        statusCode: res.status,
+        durationMs: performance.now() - start,
+        promptTokens: prompt,
+        outputTokens: output,
+        totalTokens: total,
+        costUsd: geminiCost(model, prompt, output),
+      }).catch(() => {});
+    }
+
+    return parseGeminiResponse(json, categories);
+  } catch (e: unknown) {
+    const err = e as Error & { status?: number };
+    const status: number | null = err?.status ?? res?.status ?? null;
+    if (monitoringEnabled()) {
+      logGeminiCall({
+        model,
+        success: false,
+        statusCode: status,
+        durationMs: performance.now() - start,
+        promptTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        costUsd: fallbackCostPerRequest(),
+        errorMessage: err?.message ?? String(e),
+      }).catch(() => {});
+    }
+    throw e;
   }
+}
 
-  const json = (await res.json()) as {
-    candidates?: Array<{
-      content?: { parts?: Array<{ text?: string }> };
-    }>;
-  };
-
+function parseGeminiResponse(
+  json: {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  },
+  categories: ReceiptCategory[]
+): { items: ReceiptItem[]; transactionDate: string } {
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   let parsed: unknown = null;
   try {

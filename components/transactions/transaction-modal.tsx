@@ -24,9 +24,10 @@ import {
 import { useWallets } from "@/lib/hooks/use-wallets";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useTransactions, Transaction } from "@/lib/hooks/use-transactions";
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Camera, Image as ImageIcon, X, RotateCwSquare } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Camera, Image as ImageIcon, X, RotateCwSquare, Mic } from "lucide-react";
 import { toast } from "sonner";
 import { CategorySelect } from "@/components/categories/category-select";
+import { VoiceDialog } from "./voice-dialog";
 import { compressImage } from "@/lib/image";
 
 interface TransactionModalProps {
@@ -56,6 +57,7 @@ export function TransactionModal({
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -202,12 +204,30 @@ export function TransactionModal({
   const isSubmitting = isCreating || isUpdating;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">
-            {transactionToEdit ? "Edit Transaksi" : "Catat Transaksi Baru"}
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-xl font-bold">
+              {transactionToEdit ? "Edit Transaksi" : "Catat Transaksi Baru"}
+            </DialogTitle>
+            {!transactionToEdit && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-full"
+                onClick={() => {
+                  onOpenChange(false);
+                  setVoiceOpen(true);
+                }}
+                aria-label="Catat dengan suara"
+              >
+                <Mic className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
@@ -465,5 +485,7 @@ export function TransactionModal({
         </form>
       </DialogContent>
     </Dialog>
+    <VoiceDialog open={voiceOpen} onOpenChange={setVoiceOpen} />
+    </>
   );
 }

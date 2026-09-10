@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { withMonitoring } from "@/lib/monitoring";
 
 // GET /api/budget-period/overrides?month=8&year=2026
 // Returns all overrides for the user, optionally filtered by month+year.
-export async function GET(req: NextRequest) {
+async function GETHandler(req: NextRequest) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user?.id) {
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
 // POST /api/budget-period/overrides
 // Body: { month, year, startDay }
 // Creates or replaces an override for the given month/year.
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user?.id) {
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
 }
 
 // DELETE /api/budget-period/overrides?month=8&year=2026
-export async function DELETE(req: NextRequest) {
+async function DELETEHandler(req: NextRequest) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user?.id) {
@@ -104,3 +105,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export const GET = withMonitoring("budget-period/overrides", GETHandler);
+export const POST = withMonitoring("budget-period/overrides", POSTHandler);
+export const DELETE = withMonitoring("budget-period/overrides", DELETEHandler);

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth-server";
 import { readReceiptFile, deleteReceiptFile } from "@/lib/receipt-storage";
+import { withMonitoring } from "@/lib/monitoring";
 
 // GET /api/receipts/[id]
 // Serves the uploaded temp receipt image. Auth-gated; ids are unguessable
 // UUIDs and receipts are never listed or shared. no-store because the file
 // is deleted when the flow ends and a cached image would linger.
-export async function GET(
+async function GETHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -38,7 +39,7 @@ export async function GET(
 
 // DELETE /api/receipts/[id]
 // Removes the temp receipt file when the extraction flow finishes. Idempotent.
-export async function DELETE(
+async function DELETEHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -56,3 +57,6 @@ export async function DELETE(
     return NextResponse.json({ error: error.message || "Gagal menghapus gambar" }, { status: 500 });
   }
 }
+
+export const GET = withMonitoring("receipts/[id]", GETHandler);
+export const DELETE = withMonitoring("receipts/[id]", DELETEHandler);

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { withMonitoring } from "@/lib/monitoring";
 
 // DELETE /api/budgets/[id]
-export async function DELETE(
+async function DELETEHandler(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -43,3 +44,5 @@ export async function DELETE(
     );
   }
 }
+
+export const DELETE = withMonitoring("budgets/[id]", DELETEHandler);

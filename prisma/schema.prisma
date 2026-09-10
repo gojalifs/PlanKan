@@ -224,3 +224,41 @@ model BudgetPeriodOverride {
   @@index([userId])
   @@map("budget_period_override")
 }
+
+// ── Monitoring ──────────────────────────────────────────────────────────────
+// API request log: one row per request. Serves both error tracking and
+// performance monitoring (avg/p95/p99 via percentile_cont on durationMs).
+model ApiLog {
+  id         String   @id @default(cuid())
+  method     String
+  route      String   // normalized template, e.g. "transactions/[id]"
+  status     Int
+  durationMs Float
+  error      String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([route, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("api_log")
+}
+
+// Gemini Vision API call log: one row per generateContent call.
+// Tracks token usage and estimated USD cost for AI budget monitoring.
+model GeminiCallLog {
+  id           String   @id @default(cuid())
+  model        String
+  success      Boolean
+  statusCode   Int?
+  durationMs   Float
+  promptTokens Int      @default(0)
+  outputTokens Int      @default(0)
+  totalTokens  Int      @default(0)
+  costUsd      Float
+  errorMessage String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([model, createdAt])
+  @@map("gemini_call_log")
+}

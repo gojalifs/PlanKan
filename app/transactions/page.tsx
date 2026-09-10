@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
 import { TransactionDetailDialog } from "@/components/transactions/transaction-detail";
-import { ReceiptFlow } from "@/components/transactions/receipt-flow";
+import { TransactionQuickFlows } from "@/components/transactions/receipt-flow";
 import { CategorySelect } from "@/components/categories/category-select";
 import {
   ArrowLeftRight,
@@ -473,7 +473,7 @@ export default function TransactionsPage() {
       />
 
       {/* Receipt → Multi-Transaction Flow (camera FAB + dialogs) */}
-      <ReceiptFlow />
+      <TransactionQuickFlows />
 
       {/* Delete Confirmation Dialog */}
       <Dialog

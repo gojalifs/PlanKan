@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { z } from "zod";
+import { withMonitoring } from "@/lib/monitoring";
 
 const updateTransactionSchema = z.object({
   walletId: z.string().min(1).optional(),
@@ -13,7 +14,7 @@ const updateTransactionSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
-export async function GET(
+async function GETHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -43,7 +44,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
+async function PUTHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -149,7 +150,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
+async function DELETEHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -202,3 +203,7 @@ export async function DELETE(
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
 }
+
+export const GET = withMonitoring("transactions/[id]", GETHandler);
+export const PUT = withMonitoring("transactions/[id]", PUTHandler);
+export const DELETE = withMonitoring("transactions/[id]", DELETEHandler);

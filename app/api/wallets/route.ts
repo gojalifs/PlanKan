@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { ensureUserStarterData } from "@/lib/default-categories";
 import { z } from "zod";
+import { withMonitoring } from "@/lib/monitoring";
 
 const createWalletSchema = z.object({
   name: z.string().min(1, "Nama dompet wajib diisi"),
@@ -14,7 +15,7 @@ const createWalletSchema = z.object({
   isExcludedFromTotal: z.boolean().default(false),
 });
 
-export async function GET() {
+async function GETHandler() {
   try {
     const session = await getServerSession();
     if (!session?.user) {
@@ -44,7 +45,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const session = await getServerSession();
     if (!session?.user) {
@@ -76,3 +77,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
 }
+
+export const GET = withMonitoring("wallets", GETHandler);
+export const POST = withMonitoring("wallets", POSTHandler);
