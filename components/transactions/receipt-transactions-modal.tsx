@@ -18,9 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, Sparkles, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { AmountInput } from "@/components/ui/amount-input";
+import { Badge } from "@/components/ui/badge";
 import { formatAmountNumber, parseAmountInput } from "@/lib/format";
 import { useWallets } from "@/lib/hooks/use-wallets";
 import { useCategories } from "@/lib/hooks/use-categories";
@@ -28,6 +29,7 @@ import { useTransactions } from "@/lib/hooks/use-transactions";
 import { CategorySelect } from "@/components/categories/category-select";
 import { ReceiptUpload, formatReceiptNote } from "@/lib/receipt";
 import { formatRupiah } from "@/lib/utils";
+import { confidencePercent, type ReceiptItemConfidence } from "@/lib/ai-confidence";
 
 interface ReceiptRow {
   key: string;
@@ -42,6 +44,8 @@ interface ReceiptRow {
   discount: number;
   note: string;
   saved: boolean;
+  /** Per-field OCR confidence for this item (from Gemini). */
+  itemConfidence?: ReceiptItemConfidence | null;
 }
 
 interface ReceiptTransactionsModalProps {
@@ -50,6 +54,8 @@ interface ReceiptTransactionsModalProps {
   receipt: ReceiptUpload | null;
   /** Compressed receipt image from the upload step — attached to row 0. */
   attachmentFile: File | null;
+  /** Confidence for the shared transaction date. */
+  transactionDateConfidence?: number | null;
 }
 
 /**
@@ -63,6 +69,7 @@ export function ReceiptTransactionsModal({
   onOpenChange,
   receipt,
   attachmentFile,
+  transactionDateConfidence,
 }: ReceiptTransactionsModalProps) {
   const { wallets } = useWallets();
   const { categories: expenseCategories } = useCategories("EXPENSE");
@@ -92,6 +99,7 @@ export function ReceiptTransactionsModal({
           discount: item.discount,
           note: formatReceiptNote(item),
           saved: false,
+          itemConfidence: item.confidence ?? null,
         }))
       );
       setIsSaving(false);
@@ -249,6 +257,14 @@ export function ReceiptTransactionsModal({
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
+              {transactionDateConfidence !== null &&
+                transactionDateConfidence !== undefined &&
+                transactionDateConfidence < 0.5 && (
+                <p className="text-[11px] text-amber-600 flex items-center gap-1 mt-0.5">
+                  <AlertTriangle className="h-3 w-3" />
+                  Tanggal mungkin kurang tepat ({confidencePercent(transactionDateConfidence)}%)
+                </p>
+              )}
             </div>
           </div>
 
@@ -312,9 +328,29 @@ export function ReceiptTransactionsModal({
                         <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary">
                           <Sparkles className="h-2.5 w-2.5" />
                           Saran AI
+                          {confidencePercent(row.itemConfidence?.category ?? null) && (
+                            <>{" "}· {confidencePercent(row.itemConfidence?.category)}%</>
+                          )}
                         </span>
                       )}
                     </div>
+                    {/* Low-confidence warning for this row */}
+                    {(() => {
+                      const conf = row.itemConfidence;
+                      if (!conf) return null;
+                      const scores = [conf.name, conf.unitPrice, conf.lineTotal, conf.category].filter(
+                        (s): s is number => s !== null && s !== undefined
+                      );
+                      if (scores.length === 0) return null;
+                      const minScore = Math.min(...scores);
+                      if (minScore >= 0.5) return null;
+                      return (
+                        <Badge variant="warning" className="gap-0.5 text-[10px] ml-1">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          Periksa
+                        </Badge>
+                      );
+                    })()}
                     <CategorySelect
                       categories={expenseCategories}
                       value={row.categoryId}

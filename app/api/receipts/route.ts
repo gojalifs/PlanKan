@@ -41,6 +41,7 @@ async function POSTHandler(request: Request) {
     // Real Gemini vision OCR when a key is configured; stub fallback in dev.
     let items: ReceiptItem[] = [];
     let transactionDate = "";
+    let transactionDateConfidence: number | null = null;
     const stored = await readReceiptFile(id);
     if (stored) {
       try {
@@ -57,7 +58,7 @@ async function POSTHandler(request: Request) {
           parentName: c.parent?.name ?? null,
         }));
 
-        ({ items, transactionDate } = await getReceiptItems(
+        ({ items, transactionDate, transactionDateConfidence } = await getReceiptItems(
           { data: stored.data, mimeType: stored.mimeType },
           categories
         ));
@@ -76,6 +77,7 @@ async function POSTHandler(request: Request) {
         imageUrl: `/api/receipts/${id}`,
         fileName: file.name,
         transactionDate,
+        transactionDateConfidence,
         items,
       },
       { status: 201 }

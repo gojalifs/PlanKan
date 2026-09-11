@@ -11,6 +11,8 @@
  * the confirm form.
  */
 
+import type { VoiceConfidence } from "@/lib/ai-confidence";
+
 /** Type of transaction the voice parser may produce. TRANSFER stays out of
  * scope for v1 (the manual modal already handles it). */
 export type VoiceType = "INCOME" | "EXPENSE";
@@ -25,6 +27,9 @@ export interface VoiceDraftRaw {
   categoryPath: string | null;
   date: string | null;
   note: string | null;
+  /** Raw per-field confidence the model reported (undefined = it omitted it;
+   * the dialog hides the badge instead of showing a made-up number). */
+  confidence?: VoiceConfidence | null;
 }
 
 /** `VoiceDraftRaw` after server-side normalization — `type` narrowed to the
@@ -50,6 +55,9 @@ export interface VoiceDraft {
   /** Always "YYYY-MM-DD" (validated server-side, defaults to today). */
   date: string;
   note: string | null;
+  /** Normalized per-field confidence from the model (null = not provided).
+   * Display-only: drives percentage badges and low-confidence warnings. */
+  confidence?: VoiceConfidence | null;
 }
 
 export interface VoiceParseResponse {

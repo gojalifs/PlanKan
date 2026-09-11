@@ -2,6 +2,10 @@ import { ReceiptItem } from "@/lib/receipt";
 import { getReceiptStub } from "@/lib/receipt-stub";
 import { geminiCost, fallbackCostPerRequest } from "@/lib/monitoring";
 import { prisma } from "@/lib/prisma";
+import {
+  normalizeConfidence,
+  normalizeReceiptConfidence,
+} from "@/lib/ai-confidence";
 
 /**
  * Gemini Vision OCR for receipt photos.
@@ -117,6 +121,17 @@ function buildPrompt(categories: ReceiptCategory[]): string {
   }
 
   lines.push(
+    "PENTING — CONFIDENCE:",
+    "Untuk setiap item, sertakan objek confidence dengan skor 0-1 untuk setiap field:",
+    "- name: seberapa yakin nama barang terbaca benar",
+    "- qty: seberapa yakin jumlah yang tertulis",
+    "- unitPrice: seberapa yakin harga satuan terbaca",
+    "- lineTotal: seberapa yakin harga akhir terbaca",
+    "- category: seberapa yakin rekomendasi kategori sesuai",
+    "Kalibrasi: sangat yakin → 0.9-1.0; cukup yakin → 0.7-0.89; ragu → 0.4-0.69; sangat ragu → 0.1-0.39.",
+    "",
+    "Untuk tanggal, sertakan transactionDateConfidence (0-1) seberapa yakin tanggal terbaca.",
+    "",
     "Jika struk buram / tidak terbaca, kembalikan { items: [] }.",
     "Hanya balas dengan JSON, tanpa teks lain."
   );
@@ -127,6 +142,7 @@ const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
     transactionDate: { type: "string" },
+    transactionDateConfidence: { type: "number" },
     items: {
       type: "array",
       items: {
@@ -139,6 +155,17 @@ const RESPONSE_SCHEMA = {
           discount: { type: "number" },
           lineTotal: { type: "number" },
           categoryName: { type: "string" },
+          confidence: {
+            type: "object",
+            properties: {
+              name: { type: "number" },
+              qty: { type: "number" },
+              unitPrice: { type: "number" },
+              lineTotal: { type: "number" },
+              category: { type: "number" },
+            },
+            // Not required — the model may omit the whole confidence object
+          },
         },
         required: ["name", "qty", "unit", "unitPrice", "discount", "lineTotal"],
       },
@@ -245,6 +272,7 @@ function toItem(
   categories: ReceiptCategory[]
 ): ReceiptItem {
   const r = (raw ?? {}) as Record<string, unknown>;
+  const confidence = normalizeReceiptConfidence(r.confidence);
   const name = typeof r.name === "string" && r.name.trim() ? r.name.trim() : `Item ${index + 1}`;
   const rawQty = toNumber(r.qty);
   // Jangan bulatkan qty: barang timbangan bisa berupa desimal (0.81 kg) atau
@@ -278,6 +306,7 @@ function toItem(
       discount: 0,
       originalPrice: 0,
       categoryId: null,
+      confidence,
     };
   }
 
@@ -305,6 +334,7 @@ function toItem(
     discount,
     originalPrice: finalLineTotal + discount,
     categoryId,
+    confidence,
   };
 }
 
@@ -316,6 +346,9 @@ function toItem(
  * a store-wide voucher, where it lands on the last line).
  */
 function flattenDiscountRows(items: ReceiptItem[]): ReceiptItem[] {
+  // Discount folding only touches lineTotal/discount/originalPrice — the
+  // item's confidence (per-field) is intentionally NOT merged or transferred
+  // here; it describes how well the template read that line.
   const kept: ReceiptItem[] = [];
   for (const item of items) {
     if (item.lineTotal < 0) {
@@ -367,7 +400,11 @@ export async function logGeminiCall(data: {
 export async function extractReceiptItems(
   image: GeminiInlineImage,
   categories: ReceiptCategory[] = []
-): Promise<{ items: ReceiptItem[]; transactionDate: string }> {
+): Promise<{
+  items: ReceiptItem[];
+  transactionDate: string;
+  transactionDateConfidence: number | null;
+}> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY belum diset");
 
@@ -467,7 +504,11 @@ function parseGeminiResponse(
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   },
   categories: ReceiptCategory[]
-): { items: ReceiptItem[]; transactionDate: string } {
+): {
+  items: ReceiptItem[];
+  transactionDate: string;
+  transactionDateConfidence: number | null;
+} {
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   let parsed: unknown = null;
   try {
@@ -476,16 +517,25 @@ function parseGeminiResponse(
     throw new Error("Gemini mengembalikan JSON tidak valid");
   }
 
-  const parsedObj = parsed as { items?: unknown[]; transactionDate?: string };
+  const parsedObj = parsed as {
+    items?: unknown[];
+    transactionDate?: string;
+    transactionDateConfidence?: unknown;
+  };
   const items = parsedObj?.items;
   if (!Array.isArray(items)) {
     // No readable item list — still try to salvage the date.
-    return { items: [], transactionDate: parsedObj?.transactionDate ?? "" };
+    return {
+      items: [],
+      transactionDate: parsedObj?.transactionDate ?? "",
+      transactionDateConfidence: normalizeConfidence(parsedObj?.transactionDateConfidence),
+    };
   }
 
   return {
     items: flattenDiscountRows(items.map((raw, i) => toItem(raw, i, categories))),
     transactionDate: parsedObj?.transactionDate ?? "",
+    transactionDateConfidence: normalizeConfidence(parsedObj?.transactionDateConfidence),
   };
 }
 
@@ -493,15 +543,21 @@ function parseGeminiResponse(
  * Resolve the line items for an uploaded receipt: real Gemini OCR when a key
  * is configured, otherwise the deterministic stub (dev without API key).
  * `transactionDate` is "YYYY-MM-DD"; the stub has no date so it returns "".
+ * `transactionDateConfidence` is the model's confidence in the date (null for stub).
  */
 export async function getReceiptItems(
   image: GeminiInlineImage,
   categories: ReceiptCategory[] = []
-): Promise<{ items: ReceiptItem[]; source: "gemini" | "stub"; transactionDate: string }> {
+): Promise<{
+  items: ReceiptItem[];
+  source: "gemini" | "stub";
+  transactionDate: string;
+  transactionDateConfidence: number | null;
+}> {
   if (!hasGeminiKey()) {
     console.warn("[receipt] GEMINI_API_KEY belum diset — memakai item stub");
-    return { items: getReceiptStub(), source: "stub", transactionDate: "" };
+    return { items: getReceiptStub(), source: "stub", transactionDate: "", transactionDateConfidence: null };
   }
-  const { items, transactionDate } = await extractReceiptItems(image, categories);
-  return { items, source: "gemini", transactionDate };
+  const { items, transactionDate, transactionDateConfidence } = await extractReceiptItems(image, categories);
+  return { items, source: "gemini", transactionDate, transactionDateConfidence };
 }

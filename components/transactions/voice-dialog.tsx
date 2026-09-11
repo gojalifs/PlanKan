@@ -22,11 +22,12 @@ import {
 } from "@/components/ui/select";
 import { CategorySelect } from "@/components/categories/category-select";
 import { AmountInput } from "@/components/ui/amount-input";
-import { Loader2, Mic, Sparkles } from "lucide-react";
+import { Loader2, Mic, Sparkles, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatAmountNumber, parseAmountInput } from "@/lib/format";
 import { formatRupiah } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { useWallets } from "@/lib/hooks/use-wallets";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useTransactions } from "@/lib/hooks/use-transactions";
@@ -37,6 +38,7 @@ import {
   type SpeechController,
 } from "@/lib/speech";
 import type { VoiceDraft, VoiceType } from "@/lib/voice-types";
+import { confidencePercent } from "@/lib/ai-confidence";
 
 interface VoiceDialogProps {
   open: boolean;
@@ -373,6 +375,9 @@ export function VoiceDialog({ open, onOpenChange }: VoiceDialogProps) {
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary">
                         <Sparkles className="h-2.5 w-2.5" />
                         Saran AI
+                        {draft?.confidence?.category != null && (
+                          <>{" "}· {confidencePercent(draft.confidence.category)}%</>
+                        )}
                       </span>
                     )}
                   </div>
@@ -401,6 +406,23 @@ export function VoiceDialog({ open, onOpenChange }: VoiceDialogProps) {
                       <p className="mt-0.5">{idDate(editDate)}</p>
                     </div>
                   </div>
+
+                  {/* Low-confidence field warnings */}
+                  {draft?.confidence && (() => {
+                    const lowFields: string[] = [];
+                    if (draft.confidence.amount != null && draft.confidence.amount < 0.5) lowFields.push("nominal");
+                    if (draft.confidence.wallet != null && draft.confidence.wallet < 0.5) lowFields.push("dompet");
+                    if (draft.confidence.category != null && draft.confidence.category < 0.5) lowFields.push("kategori");
+                    if (draft.confidence.date != null && draft.confidence.date < 0.5) lowFields.push("tanggal");
+                    if (draft.confidence.type != null && draft.confidence.type < 0.5) lowFields.push("tipe");
+                    if (lowFields.length === 0) return null;
+                    return (
+                      <div className="flex items-center gap-1.5 text-amber-600 text-xs">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        <span>Periksa: {lowFields.join(", ")}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 /* ---- editable form ---- */

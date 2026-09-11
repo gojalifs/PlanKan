@@ -26,6 +26,7 @@ import {
   NormalizedVoiceDraftRaw,
   VoiceType,
 } from "@/lib/voice-types";
+import { normalizeVoiceConfidence } from "@/lib/ai-confidence";
 
 /** What the parser needs to know about the user's world: their wallets and
  * categories. Fetched by the route, passed in so this module stays pure. */
@@ -87,6 +88,20 @@ const RECORD_TRANSACTION = {
         type: "string",
         description: "Catatan singkat transaksi; boleh string kosong (\"\").",
       },
+      confidence: {
+        type: "object",
+        description:
+          "Skor keyakinan 0-1 untuk setiap field. Kirim objek dengan: type, amount, wallet, category, date, note. Jika yakin → 0.9-1.0, ragu → 0.5, sangat ragu → 0.2.",
+        properties: {
+          type: { type: "number", description: "Keyakinan untuk tipe transaksi (0-1)." },
+          amount: { type: "number", description: "Keyakinan untuk nominal (0-1)." },
+          wallet: { type: "number", description: "Keyakinan untuk pemilihan dompet (0-1)." },
+          category: { type: "number", description: "Keyakinan untuk pemilihan kategori (0-1)." },
+          date: { type: "number", description: "Keyakinan untuk tanggal (0-1)." },
+          note: { type: "number", description: "Keyakinan untuk catatan (0-1)." },
+        },
+        // Not in required — model may omit the entire confidence object
+      },
     },
     required: ["type", "amount", "walletName", "categoryPath", "date", "note"],
   },
@@ -121,6 +136,7 @@ export function buildVoicePrompt(text: string, ctx: VoiceContext): string {
     "- date: tanggal transaksi format YYYY-MM-DD. Kata relatif dihitung dari 'Hari ini':",
     `  'hari ini' → ${todayISO}; 'kemarin' → ${yesterdayISO}; tanggal tanpa tahun dianggap bulan ini.`,
     "- note: catatan singkat transaksi; boleh string kosong.",
+    "- confidence: kirim objek confidence dengan skor 0-1 untuk setiap field (type, amount, wallet, category, date, note). Sangat yakin → 0.9-1.0; ragu → 0.5; sangat ragu → 0.2.",
     "",
   ];
 
@@ -204,6 +220,7 @@ export function normalizeDraft(raw: unknown): NormalizedVoiceDraftRaw {
     categoryPath: toStr(r.categoryPath),
     date,
     note: toStr(r.note),
+    confidence: normalizeVoiceConfidence(r.confidence),
   };
 }
 
@@ -247,6 +264,7 @@ export function resolveDraft(raw: NormalizedVoiceDraftRaw, ctx: VoiceContext): V
     categoryName: category ? categoryLabel(category) : null,
     date: raw.date ?? localTodayISO(),
     note: raw.note,
+    confidence: raw.confidence ?? null,
   };
 }
 

@@ -7,6 +7,8 @@
  * never these shapes.
  */
 
+import type { ReceiptItemConfidence } from "@/lib/ai-confidence";
+
 export interface ReceiptItem {
   /** Stable per-receipt item id, e.g. "it-0". */
   id: string;
@@ -31,6 +33,9 @@ export interface ReceiptItem {
   /** Best-guess user category id (from Gemini against the user's category
    * list), pre-filled in the form but always overridable by the user. */
   categoryId: string | null;
+  /** Per-field confidence scores from the OCR model (null = not available;
+   * the UI hides the badge rather than showing a made-up number). */
+  confidence?: ReceiptItemConfidence | null;
 }
 
 export interface ReceiptUpload {
@@ -43,6 +48,9 @@ export interface ReceiptUpload {
   /** Transaction date from the receipt, "YYYY-MM-DD". Empty string when the
    * OCR could not find a date (modal falls back to today). */
   transactionDate: string;
+  /** Confidence score for the transactionDate extraction (null = not
+   * available; UI shows a warning when it is below the low threshold). */
+  transactionDateConfidence?: number | null;
   /** Line items extracted by OCR. */
   items: ReceiptItem[];
 }
