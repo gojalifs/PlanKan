@@ -23,11 +23,14 @@ import {
   Zap,
   Sparkles,
   Eye,
+  AlertTriangle,
 } from "lucide-react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
 import { TransactionDetailDialog } from "@/components/transactions/transaction-detail";
 import { TransactionQuickFlows } from "@/components/transactions/receipt-flow";
+import { AnomalyWarningCard } from "@/components/dashboard/anomaly-warning-card";
+import { MonthlyReviewCard } from "@/components/dashboard/monthly-review-card";
 import type { Transaction } from "@/lib/hooks/use-transactions";
 
 const containerVariants: Variants = {
@@ -219,6 +222,9 @@ export default function HomePage() {
         </div>
       </motion.div>
 
+      {/* Monthly Review Teaser (budget-aware, period starts when budget resets) */}
+      <MonthlyReviewCard />
+
       {/* Overview Stat Cards */}
       <motion.div
         variants={containerVariants}
@@ -333,6 +339,9 @@ export default function HomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Wallets & Category Breakdown (1 col) */}
         <motion.div variants={itemVariants} className="space-y-6">
+          {/* Anomaly warnings (renders nothing when none) */}
+          <AnomalyWarningCard />
+
           {/* Wallets Preview */}
           <Card className="border-border shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -533,6 +542,15 @@ export default function HomePage() {
                             >
                               {tx.type}
                             </Badge>
+                            {tx.isAnomaly && (
+                              <Badge
+                                variant="warning"
+                                className="flex items-center gap-1 text-[10px] mt-1"
+                              >
+                                <AlertTriangle className="h-3 w-3" />
+                                Tidak biasa
+                              </Badge>
+                            )}
                           </div>
                           <Button
                             variant="ghost"

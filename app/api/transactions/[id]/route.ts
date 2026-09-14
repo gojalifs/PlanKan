@@ -3,6 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { z } from "zod";
 import { withMonitoring } from "@/lib/monitoring";
+import {
+  ANOMALY_WINDOW_DAYS,
+  detectAnomaly,
+  expenseAnomalyBucket,
+  groupExpenseAmountsByParent,
+  type ExpenseForAnomaly,
+} from "@/lib/anomaly";
 
 const updateTransactionSchema = z.object({
   walletId: z.string().min(1).optional(),
@@ -74,6 +81,51 @@ async function PUTHandler(
     const newNote = validated.note !== undefined ? validated.note : existing.note;
     const newCategoryId = validated.categoryId !== undefined ? validated.categoryId : existing.categoryId;
 
+    // Recompute the anomaly flag: for EXPENSE, compare the edited amount against
+    // the category's recent history, excluding this row from its own baseline.
+    const anomaly = { isAnomaly: false, anomalyReason: null as string | null };
+    if (newType === "EXPENSE") {
+      const category = newCategoryId
+        ? await prisma.category.findFirst({
+            where: { id: newCategoryId, userId: session.user.id },
+            include: { parent: true },
+          })
+        : null;
+
+      const candidate: ExpenseForAnomaly = {
+        amount: Number(newAmount),
+        categoryId: newCategoryId ?? null,
+        parentCategoryId: category?.parentId ?? category?.id ?? null,
+        parentCategoryName: category?.parent?.name ?? null,
+      };
+
+      const windowStart = new Date(newDate.getTime() - ANOMALY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+      const history = await prisma.transaction.findMany({
+        where: {
+          userId: session.user.id,
+          type: "EXPENSE",
+          date: { gte: windowStart },
+          NOT: { id },
+        },
+        select: { amount: true, category: { select: { id: true, parentId: true } } },
+      });
+
+      const buckets = groupExpenseAmountsByParent(
+        history.map((t) => ({
+          amount: Number(t.amount),
+          categoryId: t.category?.id ?? null,
+          parentCategoryId: t.category?.parentId ?? t.category?.id ?? null,
+          parentCategoryName: null,
+        })),
+      );
+
+      const result = detectAnomaly(candidate, buckets.get(expenseAnomalyBucket(candidate).key)?.amounts ?? []);
+      if (result.isAnomaly) {
+        anomaly.isAnomaly = true;
+        anomaly.anomalyReason = result.reason;
+      }
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       // 1. Revert previous transaction effects
       const prevAmount = Number(existing.amount);
@@ -131,6 +183,8 @@ async function PUTHandler(
           amount: newAmount,
           date: newDate,
           note: newNote,
+          isAnomaly: anomaly.isAnomaly,
+          anomalyReason: anomaly.anomalyReason,
         },
         include: {
           wallet: true,

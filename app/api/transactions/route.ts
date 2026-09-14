@@ -3,6 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { z } from "zod";
 import { withMonitoring } from "@/lib/monitoring";
+import {
+  ANOMALY_WINDOW_DAYS,
+  detectAnomaly,
+  expenseAnomalyBucket,
+  groupExpenseAmountsByParent,
+  type ExpenseForAnomaly,
+} from "@/lib/anomaly";
 
 const createTransactionSchema = z.object({
   walletId: z.string().min(1, "Dompet asal wajib dipilih"),
@@ -195,6 +202,47 @@ async function POSTHandler(request: Request) {
 
     const transactionDate = validated.date ? new Date(validated.date) : new Date();
 
+    // Anomaly detection: for EXPENSE only, compare the new amount against the
+    // category's recent history (90-day window, parent-aggregated). The row
+    // isn't persisted yet, so it's naturally excluded from its own baseline.
+    const anomaly = { isAnomaly: false, anomalyReason: null as string | null };
+    if (validated.type === "EXPENSE") {
+      const category = validated.categoryId
+        ? await prisma.category.findFirst({
+            where: { id: validated.categoryId, userId: session.user.id },
+            include: { parent: true },
+          })
+        : null;
+
+      const candidate: ExpenseForAnomaly = {
+        amount: Number(validated.amount),
+        categoryId: validated.categoryId ?? null,
+        parentCategoryId: category?.parentId ?? category?.id ?? null,
+        parentCategoryName: category?.parent?.name ?? null,
+      };
+
+      const windowStart = new Date(transactionDate.getTime() - ANOMALY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+      const history = await prisma.transaction.findMany({
+        where: { userId: session.user.id, type: "EXPENSE", date: { gte: windowStart } },
+        select: { amount: true, category: { select: { id: true, parentId: true } } },
+      });
+
+      const buckets = groupExpenseAmountsByParent(
+        history.map((t) => ({
+          amount: Number(t.amount),
+          categoryId: t.category?.id ?? null,
+          parentCategoryId: t.category?.parentId ?? t.category?.id ?? null,
+          parentCategoryName: null,
+        })),
+      );
+
+      const result = detectAnomaly(candidate, buckets.get(expenseAnomalyBucket(candidate).key)?.amounts ?? []);
+      if (result.isAnomaly) {
+        anomaly.isAnomaly = true;
+        anomaly.anomalyReason = result.reason;
+      }
+    }
+
     let created;
     try {
       created = await prisma.$transaction(async (tx) => {
@@ -210,6 +258,8 @@ async function POSTHandler(request: Request) {
             note: validated.note || null,
             attachmentUrl: attachmentUrl || null,
             idempotencyKey: validated.idempotencyKey || null,
+            isAnomaly: anomaly.isAnomaly,
+            anomalyReason: anomaly.anomalyReason,
           },
           include: {
             wallet: true,

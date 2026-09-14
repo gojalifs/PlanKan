@@ -18,6 +18,7 @@ import {
   Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MonthlyReviewCard } from "@/components/dashboard/monthly-review-card";
 import {
   AreaChart,
   Area,
@@ -255,6 +256,9 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* ── AI Monthly Review ── */}
+      <MonthlyReviewCard month={month} year={year} fullWidth />
 
       {/* ── Row 1: Area trend + Pie pengeluaran per kategori ── */}
       <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -33,6 +33,7 @@ import {
   Filter,
   RotateCcw,
   Loader2,
+  AlertTriangle,
   Calendar,
   Eye,
 } from "lucide-react";
@@ -384,6 +385,15 @@ export default function TransactionsPage() {
                               >
                                 {tx.type}
                               </Badge>
+                              {tx.isAnomaly && (
+                                <Badge
+                                  variant="warning"
+                                  className="flex items-center gap-1 text-[10px] shrink-0"
+                                >
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Tidak biasa
+                                </Badge>
+                              )}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1">

@@ -17,6 +17,7 @@ import {
   StickyNote,
   ExternalLink,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 import {
   formatRupiah,
@@ -163,6 +164,17 @@ export function TransactionDetailDialog({
               label="Tanggal"
               value={formatDateIndo(transaction.date)}
             />
+            {transaction.isAnomaly && (
+              <div className="flex items-start justify-between gap-3 py-2">
+                <span className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 shrink-0">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Tidak biasa
+                </span>
+                <span className="text-sm font-medium text-right break-words min-w-0">
+                  {transaction.anomalyReason}
+                </span>
+              </div>
+            )}
             {transaction.note && (
               <DetailRow icon={StickyNote} label="Catatan" value={transaction.note} />
             )}

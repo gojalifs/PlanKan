@@ -16,6 +16,14 @@ export interface SummaryData {
     color: string;
     amount: number;
   }>;
+  recentAnomalies?: Array<{
+    transactionId: string;
+    amount: number;
+    date: string;
+    parentCategoryName: string;
+    median: number;
+    reason: string;
+  }>;
 }
 
 export function useSummary() {

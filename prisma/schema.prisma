@@ -29,6 +29,7 @@ model User {
   budgets              Budget[]
   budgetPeriodSetting  BudgetPeriodSetting?
   budgetPeriodOverrides BudgetPeriodOverride[]
+  monthlyReviews      MonthlyReview[]
 
   @@map("user")
 }
@@ -155,6 +156,8 @@ model Transaction {
   // save whose response was lost (e.g. proxy timeout after commit) reuses the
   // same key and returns the already-created row instead of duplicating.
   idempotencyKey      String?         @unique
+  isAnomaly           Boolean         @default(false)
+  anomalyReason       String?         @db.Text
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
@@ -261,4 +264,28 @@ model GeminiCallLog {
   @@index([createdAt])
   @@index([model, createdAt])
   @@map("gemini_call_log")
+}
+
+// ── AI Monthly Review ────────────────────────────────────────────────────────
+// One cached review per (user, budget month). `statsJson` is the
+// deterministic snapshot the card renders; `summary`/`suggestions` are
+// AI-generated qualitative language only (numbers never invented by AI).
+model MonthlyReview {
+  id             String   @id @default(cuid())
+  userId         String
+  month          Int                 // 1–12 budget month
+  year           Int                 // e.g. 2026
+  statsJson      Json                // deterministic MonthlyStats snapshot
+  conditionLabel String?             // "Bagus" | "Perlu Perhatian" | "Kritis"
+  summary        String?  @db.Text
+  suggestions    Json                // string[]
+  source         String   @default("gemini") // "gemini" | "fallback"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month, year])
+  @@index([userId])
+  @@map("monthly_review")
 }

@@ -16,6 +16,8 @@ export interface Transaction {
   date: string;
   attachmentUrl?: string | null;
   note?: string | null;
+  isAnomaly?: boolean;
+  anomalyReason?: string | null;
   createdAt: string;
   updatedAt: string;
   wallet?: Wallet;
@@ -108,13 +110,18 @@ export function useTransactions(filters?: TransactionFilters) {
       if (!res.ok) throw new Error(result.error || 'Gagal mencatat transaksi');
       return result.transaction;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["wallets"] });
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       // Silent saves (multi-receipt rows) fire one toast at the end, not N.
       if ((variables as any).silent) return;
       toast.success("Transaksi berhasil dicatat!");
+      if (data.isAnomaly) {
+        toast.warning("Pengeluaran tidak biasa terdeteksi", {
+          description: data.anomalyReason || undefined,
+        });
+      }
     },
     onError: (err: any) => {
       toast.error(err.message || "Terjadi kesalahan");
