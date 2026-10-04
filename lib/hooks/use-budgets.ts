@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { showErrorToast } from "@/lib/quota-errors";
 
 export interface SubBudgetItem {
   id: string | null;
@@ -88,7 +89,11 @@ export function useBudgets(month?: number, year?: number) {
         body: JSON.stringify(data),
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Gagal menyimpan budget");
+      if (!res.ok) {
+        const error = new Error(result.error || "Gagal menyimpan budget");
+        (error as { code?: string }).code = result.code;
+        throw error;
+      }
       return result;
     },
     onSuccess: () => {
@@ -96,8 +101,8 @@ export function useBudgets(month?: number, year?: number) {
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       toast.success("Anggaran budget berhasil disimpan!");
     },
-    onError: (err: any) => {
-      toast.error(err.message || "Terjadi kesalahan saat menyimpan budget");
+    onError: (err: Error) => {
+      showErrorToast(err, "Terjadi kesalahan saat menyimpan budget");
     },
   });
 
@@ -115,7 +120,7 @@ export function useBudgets(month?: number, year?: number) {
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       toast.success("Anggaran budget berhasil dihapus!");
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast.error(err.message || "Terjadi kesalahan saat menghapus budget");
     },
   });

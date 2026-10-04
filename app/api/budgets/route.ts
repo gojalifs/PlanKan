@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveBudgetPeriod } from "@/lib/budget-period";
+import { getLimit } from "@/lib/entitlement";
 import { withMonitoring } from "@/lib/monitoring";
 
 // GET /api/budgets?month=8&year=2026
@@ -192,10 +193,11 @@ async function GETHandler(req: NextRequest) {
       },
       items,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = error as { message?: string };
     console.error("GET /api/budgets error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch budgets" },
+      { error: e.message || "Failed to fetch budgets" },
       { status: 500 }
     );
   }
@@ -228,6 +230,22 @@ async function POSTHandler(req: NextRequest) {
         { error: "Nominal budget harus berupa angka positif" },
         { status: 400 }
       );
+    }
+
+    // Enforce the plan's budget count limit (budget.limit; null == unlimited).
+    const budgetLimit = await getLimit(session.user.id, "budget.limit");
+    if (budgetLimit !== null) {
+      const count = await prisma.budget.count({ where: { userId: session.user.id } });
+      if (count >= budgetLimit) {
+        return NextResponse.json(
+          {
+            error: `Kamu maksimal punya ${budgetLimit} budget di paket ini. Naikkan langganan untuk lebih banyak.`,
+            code: "BUDGET_LIMIT_REACHED",
+            limit: budgetLimit,
+          },
+          { status: 409 }
+        );
+      }
     }
 
     // Verify category exists and is EXPENSE
@@ -265,10 +283,11 @@ async function POSTHandler(req: NextRequest) {
     });
 
     return NextResponse.json(budget, { status: 200 });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = error as { message?: string };
     console.error("POST /api/budgets error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to save budget" },
+      { error: e.message || "Failed to save budget" },
       { status: 500 }
     );
   }

@@ -1,14 +1,20 @@
-# Local development overrides — automatically loaded with `docker-compose up`
-# Production does NOT use this file: `docker-compose -f docker-compose.yml up`
+# Production runtime overrides — automatically loaded with `docker-compose up`.
+# This keeps the long-lived `plankan-app-dev` container name (and therefore the
+# existing Traefik router + ACME certificate for budget.twogether.click) while
+# serving the production build. Use `-f docker-compose.yml` alone for a
+# compose file that names the container `plankan-app`.
 services:
   plankan_app:
     container_name: plankan-app-dev
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - MINIO_ENDPOINT=plankan-minio
     ports:
       - "3000:3000"
-    labels: []   # disable Traefik in local dev
+    # NOTE: `labels` is merged/appended by Compose, never replaced, so an empty
+    # list here does NOT disable the Traefik labels from docker-compose.yml.
+    # The router for Host(`budget.twogether.click`) stays active on purpose.
+    labels: []
 
   minio:
     ports:

@@ -2,9 +2,14 @@ import "dotenv/config";
 import { prisma } from "../lib/prisma";
 import { auth } from "../lib/auth";
 import { ensureUserStarterData } from "../lib/default-categories";
+import { seedDefaultPlans } from "../lib/plans-config";
 
 async function main() {
   console.log("🌱 Mulai seeding database PlanKan...");
+
+  // Monetization plans & entitlements (idempotent) — MUST exist before users.
+  await seedDefaultPlans();
+  console.log("💳 Plan & entitlement tersedia (FREE/STARTER/PLUS/PRO/FAMILY).");
 
   // Check if demo user exists
   let user = await prisma.user.findUnique({

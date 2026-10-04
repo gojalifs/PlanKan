@@ -21,16 +21,19 @@ import {
   ArrowLeftRight,
   Tags,
   Target,
+  Goal,
   PlusCircle,
   LogOut,
-  User,
   Menu,
   X,
   BarChart3,
   Activity,
+  Sparkles,
+  Users,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TransactionModal } from "@/components/transactions/transaction-modal";
+import { PlanBadge } from "@/components/layout/plan-badge";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -48,6 +51,8 @@ export function Navbar() {
     { label: "Dashboard", href: "/", icon: LayoutDashboard },
     { label: "Transaksi", href: "/transactions", icon: ArrowLeftRight },
     { label: "Budget", href: "/budgets", icon: Target },
+    { label: "Tujuan", href: "/goals", icon: Goal },
+    { label: "Keluarga", href: "/workspace", icon: Users },
     { label: "Laporan", href: "/reports", icon: BarChart3 },
     { label: "Monitoring", href: "/monitoring", icon: Activity },
     { label: "Dompet", href: "/wallets", icon: Wallet },
@@ -133,6 +138,9 @@ export function Navbar() {
                   </Button>
                 </motion.div>
 
+                {/* Plan & quota badge (user-owned subscription) */}
+                <PlanBadge />
+
                 {/* User Dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -176,6 +184,12 @@ export function Navbar() {
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/pricing" className="cursor-pointer">
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Paket &amp; Kuota
+                      </Link>
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleSignOut} className="text-rose-600 focus:text-rose-600 cursor-pointer">
                       <LogOut className="mr-2 h-4 w-4" />
                       Keluar

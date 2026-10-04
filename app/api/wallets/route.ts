@@ -1,8 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "@/lib/auth-server";
-import { ensureUserStarterData } from "@/lib/default-categories";
-import { z } from "zod";
+import { getLimit } from "@/lib/entitlement";
 import { withMonitoring } from "@/lib/monitoring";
 
 const createWalletSchema = z.object({
@@ -15,23 +14,29 @@ const createWalletSchema = z.object({
   isExcludedFromTotal: z.boolean().default(false),
 });
 
-async function GETHandler() {
+async function GETHandler(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user) {
+    const session = await auth.api.getSession({
+      headers: await new Headers({ "Authorization": req.headers.get("authorization") || "" }),
+    });
+
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await ensureUserStarterData(session.user.id);
+    const userWorkspaces = await prisma.workspaceMember.findMany({
+      where: { userId: session.user.id, status: "ACTIVE" },
+      select: { workspaceId: true },
+    });
 
     const wallets = await prisma.wallet.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "asc" },
-      include: {
-        _count: {
-          select: { transactions: true, transfersIn: true },
-        },
+      where: {
+        OR: [
+          { userId: session.user.id, workspaceId: null },
+          { workspaceId: { in: userWorkspaces.map(m => m.workspaceId) } }
+        ]
       },
+      orderBy: { createdAt: "asc" },
     });
 
     const totalBalance = wallets
@@ -39,25 +44,54 @@ async function GETHandler() {
       .reduce((sum, w) => sum + Number(w.balance), 0);
 
     return NextResponse.json({ wallets, totalBalance });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = error as { message?: string };
     console.error("Error GET /api/wallets:", error);
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });
   }
 }
 
-async function POSTHandler(request: Request) {
+async function POSTHandler(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user) {
+    const session = await auth.api.getSession({
+      headers: await new Headers({ "Authorization": req.headers.get("authorization") || "" }),
+    });
+
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await req.json();
     const validated = createWalletSchema.parse(body);
+    const workspaceId = validated.workspaceId || null;
+
+    // Enforce the plan's wallet count limit
+    const walletLimit = await getLimit(session.user.id, "wallet.limit");
+    if (walletLimit !== null) {
+      const count = await prisma.wallet.count({
+        where: {
+          OR: [
+            { userId: session.user.id, workspaceId: null },
+            { workspaceId: { in: userWorkspaces.map(m => m.workspaceId) } }
+          ]
+        }
+      });
+      if (count >= walletLimit) {
+        return NextResponse.json(
+          {
+            error: `Kamu maksimal punya ${walletLimit} dompet di paket ini. Naikkan langganan untuk lebih banyak.`,
+            code: "WALLET_LIMIT_REACHED",
+            limit: walletLimit,
+          },
+          { status: 409 }
+        );
+      }
+    }
 
     const wallet = await prisma.wallet.create({
       data: {
         userId: session.user.id,
+        workspaceId,
         name: validated.name,
         type: validated.type,
         balance: validated.balance,
@@ -69,12 +103,13 @@ async function POSTHandler(request: Request) {
     });
 
     return NextResponse.json({ wallet }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = error as { name?: string; message?: string; errors?: { message?: string }[] };
     console.error("Error POST /api/wallets:", error);
-    if (error.name === "ZodError") {
-      return NextResponse.json({ error: error.errors[0]?.message }, { status: 400 });
+    if (e.name === "ZodError") {
+      return NextResponse.json({ error: e.errors?.[0]?.message }, { status: 400 });
     }
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });
   }
 }
 

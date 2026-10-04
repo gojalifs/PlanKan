@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { showErrorToast } from "@/lib/quota-errors";
 import type { VoiceDraft } from "@/lib/voice-types";
 
 /**
@@ -20,11 +20,15 @@ export function useVoiceParse() {
         body: JSON.stringify({ text }),
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Gagal memahami ucapan");
+      if (!res.ok) {
+        const error = new Error(result.error || "Gagal memahami ucapan");
+        (error as { code?: string }).code = result.code;
+        throw error;
+      }
       return result as { draft: VoiceDraft };
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Terjadi kesalahan");
+      showErrorToast(err, "Gagal memahami ucapan");
     },
   });
 

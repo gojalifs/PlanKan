@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { showErrorToast } from "@/lib/quota-errors";
 import { ReceiptUpload } from "@/lib/receipt";
 
 /**
@@ -21,14 +21,18 @@ export function useReceipt() {
         body: formData,
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Gagal mengunggah struk");
+      if (!res.ok) {
+        const error = new Error(result.error || "Gagal mengunggah struk");
+        (error as { code?: string }).code = result.code;
+        throw error;
+      }
       return result as ReceiptUpload;
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["receipt", data.id], data);
     },
-    onError: (err: any) => {
-      toast.error(err.message || "Terjadi kesalahan");
+    onError: (err: Error) => {
+      showErrorToast(err, "Gagal mengunggah struk");
     },
   });
 

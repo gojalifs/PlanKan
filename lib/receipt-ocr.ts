@@ -106,15 +106,16 @@ function buildPrompt(categories: ReceiptCategory[]): string {
     "PENTING — ANGKA:",
     "- Tulis Rupiah tanpa pemisah ribuan: 84.900 → 84900, 68.770 → 68770, 1.890 → 1890.",
     "- Tanda minus hanya untuk baris potongan murni.",
-    "",
-    "PENTING — KATEGORI:",
-    "Cocokkan SETIAP item ke SALAH SATU kategori dari daftar user berikut.",
-    "Pilih kategori yang paling spesifik; untuk sub-kategori tulis lengkap 'Parent > Child'.",
-    "Jika tidak ada kategori yang cocok, isi categoryName dengan string kosong.",
-    "",
   ];
 
   if (categories.length > 0) {
+    lines.push(
+      "PENTING — KATEGORI:",
+      "Cocokkan SETIAP item ke SALAH SATU kategori dari daftar user berikut.",
+      "Pilih kategori yang paling spesifik; untuk sub-kategori tulis lengkap 'Parent > Child'.",
+      "Jika tidak ada kategori yang cocok, isi categoryName dengan string kosong.",
+      ""
+    );
     lines.push("Daftar kategori user:");
     for (const c of categories) lines.push(`- ${categoryLabel(c)}`);
     lines.push("");

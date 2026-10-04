@@ -7,11 +7,46 @@ import { z } from "zod";
 import { withMonitoring } from "@/lib/monitoring";
 import { fetchMonthlyStats, conditionFromStats, buildFallbackSuggestions } from "@/lib/monthly-review";
 import { generateMonthlyReviewText } from "@/lib/ai-review";
+import { canUse } from "@/lib/entitlement";
 
 const paramsSchema = z.object({
   month: z.number().int().min(1).max(12),
   year: z.number().int().min(2000).max(2100),
 });
+
+/**
+ * AI-generated monthly review text is a paid tier feature (ai.monthly_review).
+ * Free users keep the stats/cards but get deterministic suggestions so the
+ * endpoint never spends variable cost on them. Always resolves without
+ * throwing; on AI failure we fall back just like before.
+ */
+async function reviewText(
+  userId: string,
+  stats: ReturnType<typeof fetchMonthlyStats> extends Promise<infer T> ? T : never
+): Promise<{ summary: string | null; suggestions: string[]; source: "gemini" | "fallback" }> {
+  if (!(await canUse(userId, "ai.monthly_review"))) {
+    return {
+      summary: null,
+      suggestions: buildFallbackSuggestions(stats),
+      source: "fallback",
+    };
+  }
+
+  try {
+    const ai = await generateMonthlyReviewText(stats);
+    return {
+      summary: ai.summary,
+      suggestions: ai.suggestions.length > 0 ? ai.suggestions : buildFallbackSuggestions(stats),
+      source: ai.source,
+    };
+  } catch {
+    return {
+      summary: null,
+      suggestions: buildFallbackSuggestions(stats),
+      source: "fallback",
+    };
+  }
+}
 
 /** Shape returned by GET/POST — matches the hook's expected shape. */
 interface MonthlyReviewPayload {
@@ -64,19 +99,7 @@ async function GETHandler(request: Request) {
     const stats = await fetchMonthlyStats(session.user.id, m, y);
     const { emoji, label: conditionLabel } = conditionFromStats(stats);
 
-    let summary: string | null = null;
-    let suggestions: string[];
-    let source: "gemini" | "fallback";
-
-    try {
-      const ai = await generateMonthlyReviewText(stats);
-      summary = ai.summary;
-      suggestions = ai.suggestions.length > 0 ? ai.suggestions : buildFallbackSuggestions(stats);
-      source = ai.source;
-    } catch {
-      suggestions = buildFallbackSuggestions(stats);
-      source = "fallback";
-    }
+    const { summary, suggestions, source } = await reviewText(session.user.id, stats);
 
     const upserted = await prisma.monthlyReview.upsert({
       where: { userId_month_year: { userId: session.user.id, month: m, year: y } },
@@ -109,12 +132,13 @@ async function GETHandler(request: Request) {
       source: upserted.source as "gemini" | "fallback",
       updatedAt: upserted.updatedAt.toISOString(),
     } satisfies MonthlyReviewPayload);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = error as { name?: string; message?: string; errors?: unknown };
     console.error("Error GET /api/monthly-review:", error);
-    if (error.name === "ZodError") {
-      return NextResponse.json({ error: "Parameter bulan/tahun tidak valid", details: error.errors }, { status: 400 });
+    if (e.name === "ZodError") {
+      return NextResponse.json({ error: "Parameter bulan/tahun tidak valid", details: e.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -136,19 +160,7 @@ async function POSTHandler(request: Request) {
     const stats = await fetchMonthlyStats(session.user.id, m, y);
     const { emoji, label: conditionLabel } = conditionFromStats(stats);
 
-    let summary: string | null = null;
-    let suggestions: string[];
-    let source: "gemini" | "fallback";
-
-    try {
-      const ai = await generateMonthlyReviewText(stats);
-      summary = ai.summary;
-      suggestions = ai.suggestions.length > 0 ? ai.suggestions : buildFallbackSuggestions(stats);
-      source = ai.source;
-    } catch {
-      suggestions = buildFallbackSuggestions(stats);
-      source = "fallback";
-    }
+    const { summary, suggestions, source } = await reviewText(session.user.id, stats);
 
     const upserted = await prisma.monthlyReview.upsert({
       where: { userId_month_year: { userId: session.user.id, month: m, year: y } },
@@ -181,12 +193,13 @@ async function POSTHandler(request: Request) {
       source: upserted.source as "gemini" | "fallback",
       updatedAt: upserted.updatedAt.toISOString(),
     } satisfies MonthlyReviewPayload);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = error as { name?: string; message?: string; errors?: unknown };
     console.error("Error POST /api/monthly-review:", error);
-    if (error.name === "ZodError") {
-      return NextResponse.json({ error: "Parameter bulan/tahun tidak valid", details: error.errors }, { status: 400 });
+    if (e.name === "ZodError") {
+      return NextResponse.json({ error: "Parameter bulan/tahun tidak valid", details: e.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });
   }
 }
 

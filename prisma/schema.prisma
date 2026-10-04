@@ -13,25 +13,139 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  sessions             Session[]
-  accounts             Account[]
-  wallets              Wallet[]
-  categories           Category[]
-  transactions         Transaction[]
-  budgets              Budget[]
-  budgetPeriodSetting  BudgetPeriodSetting?
+  sessions              Session[]
+  accounts              Account[]
+  wallets               Wallet[]
+  categories            Category[]
+  transactions          Transaction[]
+  budgets               Budget[]
+  budgetPeriodSetting   BudgetPeriodSetting?
   budgetPeriodOverrides BudgetPeriodOverride[]
-  monthlyReviews      MonthlyReview[]
+  monthlyReviews        MonthlyReview[]
+  financialGoals        FinancialGoal[]
+  // Billing / monetization (Phase 2+3)
+  welcomeBonusClaimedAt DateTime?
+  subscriptions         Subscription[]
+  usageRecords          UsageRecord[]
+  usageLeases           UsageLease[]
+  // Workspace (Phase 7)
+  workspaceMemberships WorkspaceMember[]
+  ownedWorkspaces      Workspace[]        @relation("WorkspaceOwner")
 
   @@map("user")
+}
+
+// ── Monetization ────────────────────────────────────────────────────────────
+// Pricing/entitlements are configurable from DB (NOT hardcoded), per monetise.md.
+// Feature values live in PlanEntitlement.value (JSON), resolved by lib/entitlement.
+
+model Plan {
+  id            String   @id @default(cuid())
+  key           String   @unique // "FREE" | "STARTER" | "PLUS" | "PRO" | "FAMILY"
+  name          String
+  priceMonthly  Int      @default(0) // Rupiah; 0 for FREE
+  billingPeriod String   @default("MONTHLY")
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entitlements  PlanEntitlement[]
+  subscriptions Subscription[]
+
+  @@map("subscription_plan")
+}
+
+model PlanEntitlement {
+  id      String @id @default(cuid())
+  planId  String
+  feature String // e.g. "ocr.monthly_limit", "ai.voice_input", "wallet.limit"
+  value   Json // e.g. 5, true, false, null(=unlimited)
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, feature])
+  @@index([feature])
+  @@map("plan_entitlement")
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String
+  planId                 String
+  workspaceId            String? // null = user-owned, non-null = workspace-owned
+  status                 SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean            @default(false)
+  provider               String             @default("manual") // "manual" (admin grant) | future gateway
+  providerSubscriptionId String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      Plan       @relation(fields: [planId], references: [id], onDelete: Restrict)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([planId])
+  @@index([workspaceId])
+  @@index([status])
+  @@map("subscription")
+}
+
+// Append-only usage ledger: analytics + audit. Enforcement uses UsageLease.
+model UsageRecord {
+  id        String   @id @default(cuid())
+  userId    String
+  feature   String // e.g. "ocr" | "voice"
+  quantity  Int      @default(1) // positive=consumed, negative=refund
+  period    String // "2026-09" (calendar month of occurence)
+  source    String   @default("SUBSCRIPTION") // "SUBSCRIPTION" | "GRANT" | "PAYG"
+  refId     String? // ties a refund back to the original consume
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, feature, period])
+  @@index([period])
+  @@map("usage_record")
+}
+
+// Per (user, feature, period) atomic counter with a snapshot of the entitlement
+// limit at last refresh. The consume() UPDATE is guarded (`WHERE used < limit+bonus`)
+// so parallel requests can never draw the counter negative (race-safe by row lock).
+model UsageLease {
+  id        String   @id @default(cuid())
+  userId    String
+  feature   String // same feature keys as UsageRecord
+  period    String // "2026-09"
+  used      Int      @default(0)
+  limit     Int      @default(0) // snapshot of entitlement at refresh
+  bonus     Int      @default(0) // non-expiring grace (e.g. one-time welcome bonus)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, feature, period])
+  @@index([userId])
+  @@map("usage_lease")
 }
 
 model Session {
@@ -44,7 +158,7 @@ model Session {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("session")
 }
@@ -66,7 +180,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("account")
 }
@@ -92,23 +206,27 @@ enum WalletType {
 }
 
 model Wallet {
-  id                  String      @id @default(cuid())
+  id                  String     @id @default(cuid())
   userId              String
+  workspaceId         String? // null = personal wallet, non-null = shared wallet
   name                String
-  type                WalletType  @default(BANK)
-  balance             Decimal     @default(0) @db.Decimal(15, 2)
-  currency            String      @default("IDR")
-  color               String      @default("#0ea5e9")
-  icon                String      @default("Wallet")
-  isExcludedFromTotal Boolean     @default(false)
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  type                WalletType @default(BANK)
+  balance             Decimal    @default(0) @db.Decimal(15, 2)
+  currency            String     @default("IDR")
+  color               String     @default("#0ea5e9")
+  icon                String     @default("Wallet")
+  isExcludedFromTotal Boolean    @default(false)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
-  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions        Transaction[] @relation("SourceWallet")
-  transfersIn         Transaction[] @relation("DestinationWallet")
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions Transaction[]   @relation("SourceWallet")
+  transfersIn  Transaction[]   @relation("DestinationWallet")
+  goals        FinancialGoal[]
 
   @@index([userId])
+  @@index([workspaceId])
   @@map("wallet")
 }
 
@@ -121,6 +239,7 @@ enum TransactionType {
 model Category {
   id          String          @id @default(cuid())
   userId      String?
+  workspaceId String? // null = personal/system category, non-null = shared
   parentId    String?
   name        String
   type        TransactionType @default(EXPENSE)
@@ -130,13 +249,15 @@ model Category {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  user        User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent      Category?       @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children    Category[]      @relation("CategoryHierarchy")
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Category[]    @relation("CategoryHierarchy")
   transactions Transaction[]
-  budgets     Budget[]
+  budgets      Budget[]
 
   @@index([userId])
+  @@index([workspaceId])
   @@index([parentId])
   @@map("category")
 }
@@ -144,6 +265,7 @@ model Category {
 model Transaction {
   id                  String          @id @default(cuid())
   userId              String
+  workspaceId         String? // null = personal transaction, non-null = shared
   walletId            String
   destinationWalletId String?
   categoryId          String?
@@ -161,33 +283,38 @@ model Transaction {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
-  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet              Wallet          @relation("SourceWallet", fields: [walletId], references: [id], onDelete: Cascade)
-  destinationWallet   Wallet?         @relation("DestinationWallet", fields: [destinationWalletId], references: [id], onDelete: SetNull)
-  category            Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace         Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  wallet            Wallet     @relation("SourceWallet", fields: [walletId], references: [id], onDelete: Cascade)
+  destinationWallet Wallet?    @relation("DestinationWallet", fields: [destinationWalletId], references: [id], onDelete: SetNull)
+  category          Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([workspaceId])
   @@index([walletId])
   @@index([date])
   @@map("transaction")
 }
 
 model Budget {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   userId      String
+  workspaceId String? // null = personal budget, non-null = shared
   categoryId  String
-  amount      Decimal   @db.Decimal(15, 2)
-  period      String    @default("MONTHLY")
-  month       Int?      // 1-12 (optional, if null applies to recurring monthly)
-  year        Int?      // e.g. 2026 (optional)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  amount      Decimal  @db.Decimal(15, 2)
+  period      String   @default("MONTHLY")
+  month       Int? // 1-12 (optional, if null applies to recurring monthly)
+  year        Int? // e.g. 2026 (optional)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category  Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([userId, categoryId])
   @@index([userId])
+  @@index([workspaceId])
   @@map("budget")
 }
 
@@ -199,11 +326,11 @@ model BudgetPeriodSetting {
   id        String   @id @default(cuid())
   userId    String   @unique
   method    String   @default("LAST_WORKING_DAY") // "LAST_WORKING_DAY" | "FIXED_DAY"
-  fixedDay  Int?     // 1-28, used when method = "FIXED_DAY"
+  fixedDay  Int? // 1-28, used when method = "FIXED_DAY"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("budget_period_setting")
 }
@@ -214,14 +341,14 @@ model BudgetPeriodSetting {
 model BudgetPeriodOverride {
   id        String   @id @default(cuid())
   userId    String
-  month     Int      // budget month: 1–12
-  year      Int      // budget year
-  startDay  Int      // day-of-month when this budget month STARTS (in the prev calendar month)
+  month     Int // budget month: 1–12
+  year      Int // budget year
+  startDay  Int // day-of-month when this budget month STARTS (in the prev calendar month)
   // startMonth is derived: always (month - 1), wrapping to Dec of (year - 1) if month = 1
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, month, year])
   @@index([userId])
@@ -234,7 +361,7 @@ model BudgetPeriodOverride {
 model ApiLog {
   id         String   @id @default(cuid())
   method     String
-  route      String   // normalized template, e.g. "transactions/[id]"
+  route      String // normalized template, e.g. "transactions/[id]"
   status     Int
   durationMs Float
   error      String?  @db.Text
@@ -273,19 +400,121 @@ model GeminiCallLog {
 model MonthlyReview {
   id             String   @id @default(cuid())
   userId         String
-  month          Int                 // 1–12 budget month
-  year           Int                 // e.g. 2026
-  statsJson      Json                // deterministic MonthlyStats snapshot
-  conditionLabel String?             // "Bagus" | "Perlu Perhatian" | "Kritis"
+  month          Int // 1–12 budget month
+  year           Int // e.g. 2026
+  statsJson      Json // deterministic MonthlyStats snapshot
+  conditionLabel String? // "Bagus" | "Perlu Perhatian" | "Kritis"
   summary        String?  @db.Text
-  suggestions    Json                // string[]
+  suggestions    Json // string[]
   source         String   @default("gemini") // "gemini" | "fallback"
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, month, year])
   @@index([userId])
   @@map("monthly_review")
+}
+
+// ── Financial Goals ──────────────────────────────────────────────────────────
+// Phase 4 (monetise.md §20, §4 "Financial goals" — Plus+ entitlement
+// `ai.financial_goals`). A savings/tracking goal with an optional target date
+// and an optional link to a wallet for context. `currentAmount` is user-tracked
+// (manual contribution) — no ledger integration needed for the MVP.
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model FinancialGoal {
+  id            String     @id @default(cuid())
+  userId        String
+  workspaceId   String? // null = personal goal, non-null = shared
+  name          String
+  targetAmount  Decimal    @default(0) @db.Decimal(15, 2)
+  currentAmount Decimal    @default(0) @db.Decimal(15, 2)
+  targetDate    DateTime?
+  walletId      String? // optional linked wallet (context only; deleted → unlink)
+  color         String     @default("#10b981")
+  icon          String     @default("PiggyBank")
+  status        GoalStatus @default(ACTIVE)
+  completedAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  wallet    Wallet?   @relation(fields: [walletId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([userId, status])
+  @@map("financial_goal")
+}
+
+// ── Workspace (Phase 7: Family Plan) ─────────────────────────────────────────
+// Family plan uses a shared workspace where all members can see and manage
+// shared resources (wallets, budgets, goals). Personal resources remain
+// private via workspaceId = null.
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   @default("FAMILY") // "FAMILY" | future: "TEAM"
+  ownerId     String // User ID of workspace creator
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner          User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members        WorkspaceMember[]
+  invitations    WorkspaceInvitation[]
+  // Riwayat subscription workspace (seperti User.subscriptions): banyak baris,
+  // yang aktif ditentukan via status. One-to-many agar selaras dengan DB
+  // (subscription.workspaceId tidak unique).
+  subscriptions  Subscription[]
+  wallets        Wallet[]
+  budgets        Budget[]
+  goals          FinancialGoal[]
+  categories     Category[]
+  transactions   Transaction[]
+
+  @@index([ownerId])
+  @@map("workspace")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String   @unique // User hanya bisa join 1 workspace
+  role        String   @default("MEMBER") // "OWNER" | "MEMBER"
+  status      String   @default("ACTIVE") // "ACTIVE" | "REMOVED"
+  joinedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("workspace_member")
+}
+
+model WorkspaceInvitation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  email       String
+  status      String    @default("PENDING") // "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED"
+  token       String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
+  @@index([token])
+  @@map("workspace_invitation")
 }

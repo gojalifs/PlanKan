@@ -30,3 +30,22 @@ export async function requireMonitoringOwner() {
 
   return session.user;
 }
+
+/**
+ * Stricter gate for write/admin billing APIs (/api/admin/subscriptions).
+ *
+ * Unlike `requireMonitoringOwner` (fail-open when MONITORING_OWNER_EMAIL is
+ * unset), billing APIs are fail-closed: without an explicit owner list nobody
+ * can grant plans (monetise.md §15).
+ */
+export async function requireBillingAdmin() {
+  const session = await getServerSession();
+  if (!session?.user) return null;
+
+  const emails = getOwnerEmails();
+  if (emails.length === 0 || !emails.includes(session.user.email.toLowerCase())) {
+    return null;
+  }
+
+  return session.user;
+}
