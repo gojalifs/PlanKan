@@ -218,7 +218,7 @@ async function POSTHandler(req: NextRequest) {
     const { or, workspaceIds } = await getAccessScope(session.user.id);
 
     const body = await req.json();
-    const { categoryId, amount, workspaceId } = body;
+    const { categoryId, amount, workspaceId, clientUpdatedAt } = body;
 
     if (!categoryId) {
       return NextResponse.json(
@@ -273,6 +273,20 @@ async function POSTHandler(req: NextRequest) {
     } else if (workspaceId === undefined && workspaceIds.length > 0) {
       // Family workspace: budget baru otomatis shared.
       targetWorkspaceId = workspaceIds[0];
+    }
+
+    // Conflict check
+    if (clientUpdatedAt) {
+      const existingBudget = await prisma.budget.findUnique({
+        where: { userId_categoryId: { userId: session.user.id, categoryId } },
+      });
+      const clientDate = new Date(clientUpdatedAt);
+      if (existingBudget && !Number.isNaN(clientDate.getTime()) && existingBudget.updatedAt > clientDate) {
+        return NextResponse.json(
+          { error: "Konflik: data server lebih baru", budget: existingBudget },
+          { status: 409 }
+        );
+      }
     }
 
     // Upsert budget
