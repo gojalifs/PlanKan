@@ -58,6 +58,10 @@ export function proxy(request: NextRequest) {
     rateLimit = checkRateLimit(`auth:${ip}`, 20, 60_000);
   } else if (pathname.startsWith("/api/devices")) {
     rateLimit = checkRateLimit(`devices:${ip}`, 60, 60_000);
+  } else if (pathname.startsWith("/api/sync")) {
+    rateLimit = checkRateLimit(`sync:${ip}`, 30, 60_000);
+  } else if (pathname.startsWith("/api/receipts")) {
+    rateLimit = checkRateLimit(`receipts:${ip}`, 20, 60_000);
   }
 
   if (rateLimit && !rateLimit.allowed) {
