@@ -15,8 +15,7 @@ components:
     Error:
       type: object
       properties:
-        error:
-          type: string
+        error: { type: string }
     User:
       type: object
       properties:
@@ -38,6 +37,19 @@ components:
         isExcludedFromTotal: { type: boolean }
         workspaceId: { type: string, nullable: true }
         updatedAt: { type: string, format: date-time }
+    WalletCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        balance: { type: number }
+        currency: { type: string }
+        color: { type: string }
+        icon: { type: string }
+        isExcludedFromTotal: { type: boolean }
+        workspaceId: { type: string, nullable: true }
+        idempotencyKey: { type: string }
     Category:
       type: object
       properties:
@@ -49,6 +61,16 @@ components:
         color: { type: string }
         isDefault: { type: boolean }
         updatedAt: { type: string, format: date-time }
+    CategoryCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [INCOME, EXPENSE] }
+        parentId: { type: string, nullable: true }
+        icon: { type: string }
+        color: { type: string }
+        workspaceId: { type: string, nullable: true }
     Transaction:
       type: object
       properties:
@@ -64,6 +86,18 @@ components:
         isAnomaly: { type: boolean }
         anomalyReason: { type: string, nullable: true }
         updatedAt: { type: string, format: date-time }
+    TransactionCreate:
+      type: object
+      required: [walletId, type, amount]
+      properties:
+        walletId: { type: string }
+        destinationWalletId: { type: string, nullable: true }
+        categoryId: { type: string, nullable: true }
+        type: { type: string, enum: [INCOME, EXPENSE, TRANSFER] }
+        amount: { type: number }
+        date: { type: string }
+        note: { type: string, nullable: true }
+        idempotencyKey: { type: string, nullable: true }
     Budget:
       type: object
       properties:
@@ -87,6 +121,10 @@ components:
         entityType: { type: string }
         entityId: { type: string }
         deletedAt: { type: string, format: date-time }
+    OkResponse:
+      type: object
+      properties:
+        success: { type: boolean }
 security:
   - bearerAuth: []
 paths:
@@ -97,6 +135,13 @@ paths:
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  timestamp: { type: string, format: date-time }
   /me:
     get:
       summary: Profil user
@@ -115,27 +160,33 @@ paths:
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wallets:
+                    type: array
+                    items: { $ref: "#/components/schemas/Wallet" }
+                  totalBalance: { type: number }
     post:
       summary: Buat dompet
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [name]
-              properties:
-                name: { type: string }
-                type: { type: string }
-                balance: { type: number }
-                currency: { type: string }
-                color: { type: string }
-                icon: { type: string }
-                isExcludedFromTotal: { type: boolean }
-                workspaceId: { type: string, nullable: true }
-                idempotencyKey: { type: string }
+            schema: { $ref: "#/components/schemas/WalletCreate" }
       responses:
-        "201": { description: Created }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wallet: { $ref: "#/components/schemas/Wallet" }
+                  alreadySaved: { type: boolean }
+        "409": { description: Limit reached }
   /wallets/{id}:
     get:
       summary: Detail dompet
@@ -146,6 +197,7 @@ paths:
           schema: { type: string }
       responses:
         "200": { description: OK }
+        "404": { description: Not found }
     put:
       summary: Update dompet
       parameters:
@@ -153,8 +205,23 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                type: { type: string }
+                balance: { type: number }
+                currency: { type: string }
+                color: { type: string }
+                icon: { type: string }
+                isExcludedFromTotal: { type: boolean }
+                clientUpdatedAt: { type: string }
       responses:
         "200": { description: OK }
+        "404": { description: Not found }
         "409": { description: Conflict }
     delete:
       summary: Hapus dompet
@@ -181,11 +248,32 @@ paths:
           in: query
           schema: { type: boolean }
       responses:
-        "200": { description: OK }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items: { $ref: "#/components/schemas/Category" }
     post:
       summary: Buat kategori
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryCreate" }
       responses:
-        "201": { description: Created }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  category: { $ref: "#/components/schemas/Category" }
   /categories/{id}:
     put:
       summary: Update kategori
@@ -194,8 +282,21 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                type: { type: string, enum: [INCOME, EXPENSE] }
+                parentId: { type: string, nullable: true }
+                icon: { type: string }
+                color: { type: string }
+                clientUpdatedAt: { type: string }
       responses:
         "200": { description: OK }
+        "404": { description: Not found }
         "409": { description: Conflict }
     delete:
       summary: Hapus kategori
@@ -232,11 +333,54 @@ paths:
           in: query
           schema: { type: integer }
       responses:
-        "200": { description: OK }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items: { $ref: "#/components/schemas/Transaction" }
+                  summary:
+                    type: object
+                    properties:
+                      totalIncome: { type: number }
+                      totalExpense: { type: number }
+                      netCashflow: { type: number }
     post:
       summary: Buat transaksi (JSON atau multipart)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransactionCreate" }
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                walletId: { type: string }
+                destinationWalletId: { type: string }
+                categoryId: { type: string }
+                type: { type: string, enum: [INCOME, EXPENSE, TRANSFER] }
+                amount: { type: number }
+                date: { type: string }
+                note: { type: string }
+                idempotencyKey: { type: string }
+                attachment:
+                  type: string
+                  format: binary
       responses:
-        "201": { description: Created }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transaction: { $ref: "#/components/schemas/Transaction" }
+                  alreadySaved: { type: boolean }
   /transactions/{id}:
     get:
       summary: Detail transaksi
@@ -246,7 +390,15 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "200": { description: OK }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transaction: { $ref: "#/components/schemas/Transaction" }
+        "404": { description: Not found }
     put:
       summary: Update transaksi
       parameters:
@@ -254,8 +406,23 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                walletId: { type: string }
+                destinationWalletId: { type: string, nullable: true }
+                categoryId: { type: string, nullable: true }
+                type: { type: string, enum: [INCOME, EXPENSE, TRANSFER] }
+                amount: { type: number }
+                date: { type: string }
+                note: { type: string, nullable: true }
+                clientUpdatedAt: { type: string }
       responses:
         "200": { description: OK }
+        "404": { description: Not found }
         "409": { description: Conflict }
     delete:
       summary: Hapus transaksi
@@ -283,6 +450,7 @@ paths:
                 type: object
                 properties:
                   url: { type: string }
+        "404": { description: Not found }
   /budgets:
     get:
       summary: Progress budget
@@ -297,8 +465,24 @@ paths:
         "200": { description: OK }
     post:
       summary: Upsert budget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categoryId, amount]
+              properties:
+                categoryId: { type: string }
+                amount: { type: number }
+                workspaceId: { type: string }
+                clientUpdatedAt: { type: string }
       responses:
-        "200": { description: OK }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
         "409": { description: Conflict }
   /budgets/{id}:
     delete:
@@ -335,6 +519,16 @@ paths:
   /receipts:
     post:
       summary: Upload gambar struk + OCR
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
       responses:
         "200": { description: OK }
   /receipts/{id}:
@@ -378,6 +572,15 @@ paths:
   /voice:
     post:
       summary: Parse teks menjadi draft transaksi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transcript]
+              properties:
+                transcript: { type: string }
       responses:
         "200": { description: OK }
   /goals:
@@ -387,6 +590,17 @@ paths:
         "200": { description: OK }
     post:
       summary: Buat goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, targetAmount]
+              properties:
+                name: { type: string }
+                targetAmount: { type: number }
+                deadline: { type: string, format: date }
       responses:
         "201": { description: Created }
   /goals/{id}:
@@ -420,6 +634,15 @@ paths:
         "200": { description: OK }
     post:
       summary: Buat workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
       responses:
         "201": { description: Created }
   /workspaces/{id}:
@@ -439,6 +662,13 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
       responses:
         "200": { description: OK }
     delete:
@@ -452,7 +682,7 @@ paths:
         "200": { description: OK }
   /workspaces/{id}/invitations:
     get:
-      summary: Kelola undangan
+      summary: List undangan
       parameters:
         - name: id
           in: path
@@ -467,6 +697,15 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
       responses:
         "201": { description: Created }
     delete:
@@ -495,6 +734,13 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId: { type: string }
       responses:
         "200": { description: OK }
   /workspaces/{id}/leave:
@@ -546,7 +792,31 @@ paths:
           in: query
           schema: { type: integer }
       responses:
-        "200": { description: OK }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  serverTime: { type: string, format: date-time }
+                  since: { type: string, format: date-time }
+                  hasMore: { type: boolean }
+                  transactions:
+                    type: array
+                    items: { $ref: "#/components/schemas/Transaction" }
+                  wallets:
+                    type: array
+                    items: { $ref: "#/components/schemas/Wallet" }
+                  categories:
+                    type: array
+                    items: { $ref: "#/components/schemas/Category" }
+                  budgets:
+                    type: array
+                    items: { $ref: "#/components/schemas/Budget" }
+                  deletions:
+                    type: array
+                    items: { $ref: "#/components/schemas/SyncDeletion" }
   /devices:
     post:
       summary: Register push token
@@ -561,7 +831,14 @@ paths:
                 platform: { type: string, enum: [android, ios, web] }
                 token: { type: string }
       responses:
-        "201": { description: Created }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  device: { $ref: "#/components/schemas/Device" }
     delete:
       summary: Hapus push token
       parameters:
@@ -578,6 +855,18 @@ paths:
         "200": { description: OK }
     post:
       summary: Grant subscription (billing admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, planKey]
+              properties:
+                userId: { type: string }
+                planKey: { type: string }
+                workspaceId: { type: string }
+                days: { type: integer }
       responses:
         "200": { description: OK }
   /admin/subscriptions/{id}:
@@ -608,5 +897,26 @@ paths:
   /monitoring/access:
     get:
       summary: Gate akses client
+      responses:
+        "200": { description: OK }
+  /auth/{path}:
+    get:
+      summary: Better Auth catch-all
+      security: []
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Better Auth catch-all
+      security: []
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema: { type: string }
       responses:
         "200": { description: OK }
