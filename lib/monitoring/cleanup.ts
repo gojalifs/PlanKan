@@ -3,11 +3,6 @@ import { prisma } from "@/lib/prisma";
 const THROTTLE_MS = 60_000;
 let lastCleanup = 0;
 
-/**
- * Opportunistic cleanup of old monitoring rows.
- * Runs at most once per minute, fire-and-forget.
- * Mirrors the pattern used by `cleanupStaleReceipts`.
- */
 export async function maybeCleanupMonitoring(): Promise<void> {
   const now = Date.now();
   if (now - lastCleanup < THROTTLE_MS) return;
@@ -30,6 +25,15 @@ export async function maybeCleanupMonitoring(): Promise<void> {
       where: { createdAt: { lt: cutoff } },
     });
   } catch {
-    // swallow
+    // swallow — cleanup is best-effort
+  }
+
+  try {
+    const cutoff = new Date(now - 30 * 86_400_000);
+    await prisma.syncDeletion.deleteMany({
+      where: { deletedAt: { lt: cutoff } },
+    });
+  } catch {
+    // swallow — cleanup is best-effort
   }
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { getAccessScope } from "@/lib/workspace";
 import { withMonitoring } from "@/lib/monitoring";
+import { maybeCleanupMonitoring } from "@/lib/monitoring/cleanup";
 
 async function GETHandler(request: Request) {
   try {
@@ -68,6 +69,8 @@ async function GETHandler(request: Request) {
       orderBy: { deletedAt: "asc" },
       take: limit,
     });
+
+    void maybeCleanupMonitoring();
 
     const serverTime = new Date().toISOString();
 
