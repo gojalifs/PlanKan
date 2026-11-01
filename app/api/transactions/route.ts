@@ -5,6 +5,7 @@ import { getAccessScope } from "@/lib/workspace";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { z } from "zod";
 import { withMonitoring } from "@/lib/monitoring";
+import { sendPush } from "@/lib/push";
 import {
   ANOMALY_WINDOW_DAYS,
   detectAnomaly,
@@ -308,6 +309,45 @@ async function POSTHandler(request: Request) {
         }
       }
       throw txError;
+    }
+
+    // Notifikasi push best-effort jika budget kategori terlampaui.
+    if (validated.type === "EXPENSE" && validated.categoryId) {
+      void (async () => {
+        try {
+          const categoryId = validated.categoryId as string;
+          const budget = await prisma.budget.findFirst({
+            where: { OR: or, categoryId },
+          });
+          if (!budget) return;
+          const start = new Date();
+          start.setDate(1);
+          start.setHours(0, 0, 0, 0);
+          const agg = await prisma.transaction.aggregate({
+            where: {
+              OR: or,
+              type: "EXPENSE",
+              categoryId,
+              date: { gte: start },
+            },
+            _sum: { amount: true },
+          });
+          const spent = Number(agg._sum.amount || 0);
+          if (spent > Number(budget.amount)) {
+            const tokens = await prisma.deviceToken.findMany({
+              where: { userId: session.user.id },
+              select: { token: true },
+            });
+            await sendPush(
+              tokens.map((t) => t.token),
+              "Budget terlampaui",
+              `Pengeluaran kategori sudah melebihi budget.`
+            );
+          }
+        } catch {
+          // ignore
+        }
+      })();
     }
 
     return NextResponse.json({ transaction: created }, { status: 201 });
