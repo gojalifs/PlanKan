@@ -11,6 +11,7 @@ const updateCategorySchema = z.object({
   parentId: z.string().nullable().optional(),
   icon: z.string().optional(),
   color: z.string().optional(),
+  clientUpdatedAt: z.string().optional().nullable(),
 });
 
 async function PUTHandler(
@@ -54,9 +55,22 @@ async function PUTHandler(
       }
     }
 
+    const clientUpdatedAtRaw =
+      validated.clientUpdatedAt || request.headers.get("if-unmodified-since");
+    if (clientUpdatedAtRaw) {
+      const clientDate = new Date(clientUpdatedAtRaw);
+      if (!Number.isNaN(clientDate.getTime()) && existing.updatedAt > clientDate) {
+        return NextResponse.json(
+          { error: "Konflik: data server lebih baru", category: existing },
+          { status: 409 }
+        );
+      }
+    }
+
+    const { clientUpdatedAt: _clientUpdatedAt, ...categoryData } = validated;
     const updated = await prisma.category.update({
       where: { id },
-      data: validated,
+      data: categoryData,
       include: {
         parent: true,
         children: true,
