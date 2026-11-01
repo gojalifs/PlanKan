@@ -13,6 +13,7 @@ const updateWalletSchema = z.object({
   color: z.string().optional(),
   icon: z.string().optional(),
   isExcludedFromTotal: z.boolean().optional(),
+  clientUpdatedAt: z.string().optional().nullable(),
 });
 
 async function GETHandler(
@@ -71,9 +72,22 @@ async function PUTHandler(
       return NextResponse.json({ error: "Dompet tidak ditemukan" }, { status: 404 });
     }
 
+    const clientUpdatedAtRaw =
+      validated.clientUpdatedAt || request.headers.get("if-unmodified-since");
+    if (clientUpdatedAtRaw) {
+      const clientDate = new Date(clientUpdatedAtRaw);
+      if (!Number.isNaN(clientDate.getTime()) && existing.updatedAt > clientDate) {
+        return NextResponse.json(
+          { error: "Konflik: data server lebih baru", wallet: existing },
+          { status: 409 }
+        );
+      }
+    }
+
+    const { clientUpdatedAt: _clientUpdatedAt, ...walletData } = validated;
     const updated = await prisma.wallet.update({
       where: { id },
-      data: validated,
+      data: walletData,
     });
 
     return NextResponse.json({ wallet: updated });
