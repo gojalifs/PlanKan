@@ -130,3 +130,7 @@ EOF
 
 - `POST /api/v1/devices` — body `{ platform, token }`.
 - `DELETE /api/v1/devices?token=...` — hapus token.
+
+## Me
+
+- `GET /api/v1/me` — profil user dari session.
