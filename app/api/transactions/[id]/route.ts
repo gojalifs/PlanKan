@@ -20,6 +20,7 @@ const updateTransactionSchema = z.object({
   amount: z.number().positive().optional(),
   date: z.string().optional(),
   note: z.string().optional().nullable(),
+  clientUpdatedAt: z.string().optional().nullable(),
 });
 
 async function GETHandler(
@@ -75,6 +76,18 @@ async function PUTHandler(
 
     if (!existing) {
       return NextResponse.json({ error: "Transaksi tidak ditemukan" }, { status: 404 });
+    }
+
+    const clientUpdatedAtRaw =
+      validated.clientUpdatedAt || request.headers.get("if-unmodified-since");
+    if (clientUpdatedAtRaw) {
+      const clientDate = new Date(clientUpdatedAtRaw);
+      if (!Number.isNaN(clientDate.getTime()) && existing.updatedAt > clientDate) {
+        return NextResponse.json(
+          { error: "Konflik: data server lebih baru", transaction: existing },
+          { status: 409 }
+        );
+      }
     }
 
     const newType = validated.type || existing.type;

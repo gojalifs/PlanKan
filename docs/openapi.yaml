@@ -1,0 +1,61 @@
+openapi: 3.0.3
+info:
+  title: PlanKan Mobile REST API
+  version: 1.0.0
+  description: REST API untuk aplikasi mobile PlanKan (alias /api/v1 dari /api).
+servers:
+  - url: https://budget.twogether.click/api/v1
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+security:
+  - bearerAuth: []
+paths:
+  /auth/...:
+    description: Better Auth catch-all (register, login, verify, reset, logout).
+  /wallets:
+    get:
+      summary: List dompet
+    post:
+      summary: Buat dompet (idempotency via Idempotency-Key)
+  /transactions:
+    get:
+      summary: List transaksi + summary
+    post:
+      summary: Buat transaksi (idempotencyKey di body)
+  /transactions/{id}:
+    get:
+      summary: Detail transaksi
+    put:
+      summary: Update transaksi (409 jika konflik)
+    delete:
+      summary: Hapus transaksi
+  /transactions/{id}/attachment:
+    get:
+      summary: URL lampiran same-origin
+  /budgets:
+    get:
+      summary: Progress budget
+    post:
+      summary: Upsert budget
+  /categories:
+    get:
+      summary: List kategori
+    post:
+      summary: Buat kategori
+  /sync:
+    get:
+      summary: Delta sync (since, limit)
+  /devices:
+    post:
+      summary: Register push token
+    delete:
+      summary: Hapus push token
