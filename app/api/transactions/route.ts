@@ -43,6 +43,7 @@ async function GETHandler(request: Request) {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 50;
+    const offset = searchParams.get("offset") ? parseInt(searchParams.get("offset")!) : 0;
 
     // Shared workspace: transaksi personal + transaksi di workspace yang diikuti.
     const filters: Prisma.TransactionWhereInput[] = [{ OR: or }];
@@ -80,9 +81,10 @@ async function GETHandler(request: Request) {
 
     const transactions = await prisma.transaction.findMany({
       where: whereClause,
-      orderBy: { date: "desc" },
-      take: limit,
-      include: {
+    orderBy: { date: "desc" },
+    take: limit,
+    skip: offset,
+    include: {
         wallet: true,
         destinationWallet: true,
         category: {
