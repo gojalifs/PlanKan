@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
+import { getAccessScope } from "@/lib/workspace";
 import { z } from "zod";
 import { withMonitoring } from "@/lib/monitoring";
 import {
@@ -32,8 +33,9 @@ async function GETHandler(
     }
 
     const { id } = await params;
+    const { or } = await getAccessScope(session.user.id);
     const transaction = await prisma.transaction.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, OR: or },
       include: {
         wallet: true,
         destinationWallet: true,
@@ -65,8 +67,10 @@ async function PUTHandler(
     const body = await request.json();
     const validated = updateTransactionSchema.parse(body);
 
+    const { or } = await getAccessScope(session.user.id);
+
     const existing = await prisma.transaction.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, OR: or },
     });
 
     if (!existing) {
@@ -81,13 +85,32 @@ async function PUTHandler(
     const newNote = validated.note !== undefined ? validated.note : existing.note;
     const newCategoryId = validated.categoryId !== undefined ? validated.categoryId : existing.categoryId;
 
+    // Wallet baru harus tetap dapat diakses user (personal atau workspace-nya).
+    const newWallet = await prisma.wallet.findFirst({
+      where: { id: newWalletId, OR: or },
+      select: { id: true, workspaceId: true },
+    });
+    if (!newWallet) {
+      return NextResponse.json({ error: "Dompet tidak valid" }, { status: 400 });
+    }
+
+    if (newType === "TRANSFER" && newDestWalletId) {
+      const destWallet = await prisma.wallet.findFirst({
+        where: { id: newDestWalletId, OR: or },
+        select: { id: true },
+      });
+      if (!destWallet) {
+        return NextResponse.json({ error: "Dompet tujuan tidak valid" }, { status: 400 });
+      }
+    }
+
     // Recompute the anomaly flag: for EXPENSE, compare the edited amount against
     // the category's recent history, excluding this row from its own baseline.
     const anomaly = { isAnomaly: false, anomalyReason: null as string | null };
     if (newType === "EXPENSE") {
       const category = newCategoryId
         ? await prisma.category.findFirst({
-            where: { id: newCategoryId, userId: session.user.id },
+            where: { id: newCategoryId, OR: or },
             include: { parent: true },
           })
         : null;
@@ -102,7 +125,7 @@ async function PUTHandler(
       const windowStart = new Date(newDate.getTime() - ANOMALY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
       const history = await prisma.transaction.findMany({
         where: {
-          userId: session.user.id,
+          OR: or,
           type: "EXPENSE",
           date: { gte: windowStart },
           NOT: { id },
@@ -176,6 +199,7 @@ async function PUTHandler(
       return await tx.transaction.update({
         where: { id },
         data: {
+          workspaceId: newWallet.workspaceId,
           walletId: newWalletId,
           destinationWalletId: newType === "TRANSFER" ? newDestWalletId : null,
           categoryId: newType !== "TRANSFER" ? newCategoryId : null,
@@ -215,8 +239,9 @@ async function DELETEHandler(
     }
 
     const { id } = await params;
+    const { or } = await getAccessScope(session.user.id);
     const existing = await prisma.transaction.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, OR: or },
     });
 
     if (!existing) {

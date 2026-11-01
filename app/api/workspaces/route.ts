@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { createWorkspace } from "@/lib/workspace";
+import { currentPlanKey } from "@/lib/subscriptions";
 
 export async function GET() {
   try {
@@ -52,6 +53,18 @@ export async function POST(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Workspace family hanya untuk user dengan plan FAMILY.
+    const planKey = await currentPlanKey(session.user.id);
+    if (planKey !== "FAMILY") {
+      return NextResponse.json(
+        {
+          error: "Workspace keluarga hanya tersedia di paket Family. Upgrade paket untuk mengaktifkannya.",
+          code: "FAMILY_PLAN_REQUIRED",
+        },
+        { status: 403 }
+      );
     }
 
     // Design decision (family-workspace-plan.md): user hanya bisa join 1 workspace.

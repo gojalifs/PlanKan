@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
+import { getAccessScope } from "@/lib/workspace";
 import { withMonitoring } from "@/lib/monitoring";
 
 async function GETHandler(request: NextRequest) {
@@ -9,6 +10,8 @@ async function GETHandler(request: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const { or } = await getAccessScope(session.user.id);
 
     const { searchParams } = new URL(request.url);
     const monthParam = searchParams.get("month"); // 1-12
@@ -35,7 +38,7 @@ async function GETHandler(request: NextRequest) {
 
       const txs = await prisma.transaction.findMany({
         where: {
-          userId: session.user.id,
+          OR: or,
           date: { gte: start, lte: end },
           type: { in: ["INCOME", "EXPENSE"] },
         },
@@ -59,7 +62,7 @@ async function GETHandler(request: NextRequest) {
     // -- 2. Expense by category (current selected month) --
     const expenseTxs = await prisma.transaction.findMany({
       where: {
-        userId: session.user.id,
+        OR: or,
         date: { gte: startOfMonth, lte: endOfMonth },
         type: "EXPENSE",
       },
@@ -110,7 +113,7 @@ async function GETHandler(request: NextRequest) {
     // -- 4. Income by category (current month) --
     const incomeTxs = await prisma.transaction.findMany({
       where: {
-        userId: session.user.id,
+        OR: or,
         date: { gte: startOfMonth, lte: endOfMonth },
         type: "INCOME",
       },

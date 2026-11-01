@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { ensureUserStarterData } from "@/lib/default-categories";
+import { getAccessScope } from "@/lib/workspace";
 import { withMonitoring } from "@/lib/monitoring";
 import {
   ANOMALY_WINDOW_DAYS,
@@ -19,13 +20,15 @@ async function GETHandler() {
 
     await ensureUserStarterData(session.user.id);
 
+    const { or } = await getAccessScope(session.user.id);
+
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
     // Fetch wallets
     const wallets = await prisma.wallet.findMany({
-      where: { userId: session.user.id },
+      where: { OR: or },
       orderBy: { createdAt: "asc" },
     });
 
@@ -36,7 +39,7 @@ async function GETHandler() {
     // Fetch monthly transactions
     const monthlyTransactions = await prisma.transaction.findMany({
       where: {
-        userId: session.user.id,
+        OR: or,
         date: {
           gte: startOfMonth,
           lte: endOfMonth,
@@ -74,7 +77,7 @@ async function GETHandler() {
 
     // Recent 10 transactions
     const recentTransactions = await prisma.transaction.findMany({
-      where: { userId: session.user.id },
+      where: { OR: or },
       orderBy: { date: "desc" },
       take: 10,
       include: {
@@ -93,7 +96,7 @@ async function GETHandler() {
     // excluded from its own bucket baseline.
     const windowStart = new Date(now.getTime() - ANOMALY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     const expenseHistory = await prisma.transaction.findMany({
-      where: { userId: session.user.id, type: "EXPENSE", date: { gte: windowStart } },
+      where: { OR: or, type: "EXPENSE", date: { gte: windowStart } },
       select: { id: true, amount: true, category: { select: { id: true, parentId: true } } },
     });
 

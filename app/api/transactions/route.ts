@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
+import { getAccessScope } from "@/lib/workspace";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { z } from "zod";
 import { withMonitoring } from "@/lib/monitoring";
 import {
@@ -32,6 +34,8 @@ async function GETHandler(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { or } = await getAccessScope(session.user.id);
+
     const { searchParams } = new URL(request.url);
     const walletId = searchParams.get("walletId");
     const categoryId = searchParams.get("categoryId");
@@ -40,46 +44,39 @@ async function GETHandler(request: Request) {
     const endDate = searchParams.get("endDate");
     const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 50;
 
-    const whereClause: any = {
-      userId: session.user.id,
-    };
+    // Shared workspace: transaksi personal + transaksi di workspace yang diikuti.
+    const filters: Prisma.TransactionWhereInput[] = [{ OR: or }];
 
     if (walletId) {
-      whereClause.OR = [
-        { walletId },
-        { destinationWalletId: walletId },
-      ];
+      filters.push({ OR: [{ walletId }, { destinationWalletId: walletId }] });
     }
 
     if (categoryId && categoryId !== "ALL") {
       const subCats = await prisma.category.findMany({
-        where: { parentId: categoryId, userId: session.user.id },
+        where: { parentId: categoryId, OR: or },
         select: { id: true },
       });
-      if (subCats.length > 0) {
-        whereClause.categoryId = {
-          in: [categoryId, ...subCats.map((s) => s.id)],
-        };
-      } else {
-        whereClause.categoryId = categoryId;
-      }
+      filters.push({
+        categoryId: subCats.length > 0 ? { in: [categoryId, ...subCats.map((s) => s.id)] } : categoryId,
+      });
     }
 
     if (type && ["INCOME", "EXPENSE", "TRANSFER"].includes(type)) {
-      whereClause.type = type;
+      filters.push({ type: type as "INCOME" | "EXPENSE" | "TRANSFER" });
     }
 
     if (startDate || endDate) {
-      whereClause.date = {};
-      if (startDate) {
-        whereClause.date.gte = new Date(startDate);
-      }
+      const date: Prisma.DateTimeFilter = {};
+      if (startDate) date.gte = new Date(startDate);
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        whereClause.date.lte = end;
+        date.lte = end;
       }
+      filters.push({ date });
     }
+
+    const whereClause: Prisma.TransactionWhereInput = { AND: filters };
 
     const transactions = await prisma.transaction.findMany({
       where: whereClause,
@@ -131,6 +128,8 @@ async function POSTHandler(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { or } = await getAccessScope(session.user.id);
+
     // Detect multipart/form-data for file uploads
     const contentType = request.headers.get('content-type') || '';
     let data: any = {};
@@ -161,7 +160,7 @@ async function POSTHandler(request: Request) {
     // same key — return the already-created row instead of writing again.
     if (validated.idempotencyKey) {
       const existing = await prisma.transaction.findFirst({
-        where: { userId: session.user.id, idempotencyKey: validated.idempotencyKey },
+        where: { idempotencyKey: validated.idempotencyKey, OR: or },
         include: { wallet: true, destinationWallet: true, category: true },
       });
       if (existing) {
@@ -170,7 +169,7 @@ async function POSTHandler(request: Request) {
     }
 
     const sourceWallet = await prisma.wallet.findFirst({
-      where: { id: validated.walletId, userId: session.user.id },
+      where: { id: validated.walletId, OR: or },
     });
     if (!sourceWallet) {
       return NextResponse.json({ error: "Dompet asal tidak valid" }, { status: 400 });
@@ -184,7 +183,7 @@ async function POSTHandler(request: Request) {
         return NextResponse.json({ error: "Dompet asal dan tujuan tidak boleh sama" }, { status: 400 });
       }
       const destWallet = await prisma.wallet.findFirst({
-        where: { id: validated.destinationWalletId, userId: session.user.id },
+        where: { id: validated.destinationWalletId, OR: or },
       });
       if (!destWallet) {
         return NextResponse.json({ error: "Dompet tujuan tidak valid" }, { status: 400 });
@@ -209,7 +208,7 @@ async function POSTHandler(request: Request) {
     if (validated.type === "EXPENSE") {
       const category = validated.categoryId
         ? await prisma.category.findFirst({
-            where: { id: validated.categoryId, userId: session.user.id },
+            where: { id: validated.categoryId, OR: or },
             include: { parent: true },
           })
         : null;
@@ -223,7 +222,7 @@ async function POSTHandler(request: Request) {
 
       const windowStart = new Date(transactionDate.getTime() - ANOMALY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
       const history = await prisma.transaction.findMany({
-        where: { userId: session.user.id, type: "EXPENSE", date: { gte: windowStart } },
+        where: { OR: or, type: "EXPENSE", date: { gte: windowStart } },
         select: { amount: true, category: { select: { id: true, parentId: true } } },
       });
 
@@ -249,6 +248,7 @@ async function POSTHandler(request: Request) {
         const transaction = await tx.transaction.create({
           data: {
             userId: session.user.id,
+            workspaceId: sourceWallet.workspaceId,
             walletId: validated.walletId,
             destinationWalletId: validated.type === "TRANSFER" ? validated.destinationWalletId : null,
             categoryId: validated.type !== "TRANSFER" ? validated.categoryId : null,
@@ -298,7 +298,7 @@ async function POSTHandler(request: Request) {
       // caller treats this save as done and never duplicates.
       if (txError?.code === "P2002" && validated.idempotencyKey) {
         const existing = await prisma.transaction.findFirst({
-          where: { userId: session.user.id, idempotencyKey: validated.idempotencyKey },
+          where: { idempotencyKey: validated.idempotencyKey, OR: or },
           include: { wallet: true, destinationWallet: true, category: true },
         });
         if (existing) {

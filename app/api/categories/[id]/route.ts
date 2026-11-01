@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
+import { getAccessScope } from "@/lib/workspace";
 import { z } from "zod";
 import { withMonitoring } from "@/lib/monitoring";
 
@@ -26,8 +27,9 @@ async function PUTHandler(
     const body = await request.json();
     const validated = updateCategorySchema.parse(body);
 
+    const { or } = await getAccessScope(session.user.id);
     const existing = await prisma.category.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, OR: or },
     });
 
     if (!existing) {
@@ -44,7 +46,7 @@ async function PUTHandler(
 
       if (validated.parentId) {
         const parentCat = await prisma.category.findFirst({
-          where: { id: validated.parentId, userId: session.user.id },
+          where: { id: validated.parentId, OR: or },
         });
         if (!parentCat) {
           return NextResponse.json({ error: "Parent kategori tidak ditemukan" }, { status: 400 });
@@ -81,8 +83,9 @@ async function DELETEHandler(
     }
 
     const { id } = await params;
+    const { or } = await getAccessScope(session.user.id);
     const existing = await prisma.category.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, OR: or },
     });
 
     if (!existing) {

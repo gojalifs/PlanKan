@@ -6,6 +6,7 @@ import {
   cancelInvitation,
   getPendingInvitations,
 } from "@/lib/workspace";
+import { sendWorkspaceInvitationEmail } from "@/lib/email";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -70,9 +71,26 @@ export async function POST(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Email wajib diisi" }, { status: 400 });
     }
 
-    const invitation = await inviteMember(workspaceId, email.trim().toLowerCase());
+    const normalizedEmail = email.trim().toLowerCase();
+    const invitation = await inviteMember(workspaceId, normalizedEmail);
 
-    return NextResponse.json({ invitation }, { status: 201 });
+    // Email bersifat best-effort: invitation tetap valid meski email gagal
+    // (owner bisa salin link dari daftar invitation pending).
+    const inviteUrl = `${new URL(request.url).origin}/workspace/invite/${invitation.token}`;
+    let emailResult: { sent: boolean; reason?: string };
+    try {
+      emailResult = await sendWorkspaceInvitationEmail({
+        to: normalizedEmail,
+        inviterName: session.user.name || session.user.email || "Pengguna PlanKan",
+        workspaceName: checked.workspace.name,
+        inviteUrl,
+      });
+    } catch (err) {
+      console.error("POST /api/workspaces/[id]/invitations send email error:", err);
+      emailResult = { sent: false, reason: "Gagal mengirim email" };
+    }
+
+    return NextResponse.json({ invitation, inviteUrl, email: emailResult }, { status: 201 });
   } catch (error: unknown) {
     const e = error as { message?: string };
     console.error("POST /api/workspaces/[id]/invitations error:", error);

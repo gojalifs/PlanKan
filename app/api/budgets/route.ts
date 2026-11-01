@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveBudgetPeriod } from "@/lib/budget-period";
 import { getLimit } from "@/lib/entitlement";
+import { getAccessScope } from "@/lib/workspace";
 import { withMonitoring } from "@/lib/monitoring";
 
 // GET /api/budgets?month=8&year=2026
@@ -16,6 +17,8 @@ async function GETHandler(req: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const { or } = await getAccessScope(session.user.id);
 
     const { searchParams } = new URL(req.url);
     const now = new Date();
@@ -41,7 +44,7 @@ async function GETHandler(req: NextRequest) {
     const expenseCategories = await prisma.category.findMany({
       where: {
         type: "EXPENSE",
-        OR: [{ userId: session.user.id }, { userId: null }],
+        OR: [...or, { userId: null }],
       },
       include: {
         parent: true,
@@ -54,9 +57,7 @@ async function GETHandler(req: NextRequest) {
 
     // 2. Get user's budgets
     const budgets = await prisma.budget.findMany({
-      where: {
-        userId: session.user.id,
-      },
+      where: { OR: or },
     });
 
     const budgetMap = new Map<string, (typeof budgets)[0]>();
@@ -65,7 +66,7 @@ async function GETHandler(req: NextRequest) {
     // 3. Get transactions for this month grouped by category
     const transactions = await prisma.transaction.findMany({
       where: {
-        userId: session.user.id,
+        OR: or,
         type: "EXPENSE",
         date: {
           gte: startDate,
@@ -214,8 +215,10 @@ async function POSTHandler(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { or, workspaceIds } = await getAccessScope(session.user.id);
+
     const body = await req.json();
-    const { categoryId, amount } = body;
+    const { categoryId, amount, workspaceId } = body;
 
     if (!categoryId) {
       return NextResponse.json(
@@ -235,7 +238,7 @@ async function POSTHandler(req: NextRequest) {
     // Enforce the plan's budget count limit (budget.limit; null == unlimited).
     const budgetLimit = await getLimit(session.user.id, "budget.limit");
     if (budgetLimit !== null) {
-      const count = await prisma.budget.count({ where: { userId: session.user.id } });
+      const count = await prisma.budget.count({ where: { OR: or } });
       if (count >= budgetLimit) {
         return NextResponse.json(
           {
@@ -248,9 +251,9 @@ async function POSTHandler(req: NextRequest) {
       }
     }
 
-    // Verify category exists and is EXPENSE
-    const category = await prisma.category.findUnique({
-      where: { id: categoryId },
+    // Verify category exists, is EXPENSE, dan dapat diakses user.
+    const category = await prisma.category.findFirst({
+      where: { id: categoryId, OR: [...or, { userId: null }] },
     });
 
     if (!category || category.type !== "EXPENSE") {
@@ -258,6 +261,18 @@ async function POSTHandler(req: NextRequest) {
         { error: "Kategori tidak valid atau bukan kategori pengeluaran" },
         { status: 400 }
       );
+    }
+
+    // Shared budget: kalau workspaceId dikirim, user harus member workspace itu.
+    let targetWorkspaceId: string | null = null;
+    if (workspaceId) {
+      if (!workspaceIds.includes(workspaceId)) {
+        return NextResponse.json({ error: "Kamu bukan member workspace tersebut" }, { status: 403 });
+      }
+      targetWorkspaceId = workspaceId;
+    } else if (workspaceId === undefined && workspaceIds.length > 0) {
+      // Family workspace: budget baru otomatis shared.
+      targetWorkspaceId = workspaceIds[0];
     }
 
     // Upsert budget
@@ -270,9 +285,11 @@ async function POSTHandler(req: NextRequest) {
       },
       update: {
         amount: numAmount,
+        workspaceId: targetWorkspaceId,
       },
       create: {
         userId: session.user.id,
+        workspaceId: targetWorkspaceId,
         categoryId,
         amount: numAmount,
         period: "MONTHLY",

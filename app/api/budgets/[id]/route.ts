@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessScope } from "@/lib/workspace";
 import { withMonitoring } from "@/lib/monitoring";
 
 // DELETE /api/budgets/[id]
@@ -19,12 +20,13 @@ async function DELETEHandler(
     }
 
     const { id } = await params;
+    const { or } = await getAccessScope(session.user.id);
 
-    const existingBudget = await prisma.budget.findUnique({
-      where: { id },
+    const existingBudget = await prisma.budget.findFirst({
+      where: { id, OR: or },
     });
 
-    if (!existingBudget || existingBudget.userId !== session.user.id) {
+    if (!existingBudget) {
       return NextResponse.json(
         { error: "Budget tidak ditemukan atau bukan milik Anda" },
         { status: 404 }

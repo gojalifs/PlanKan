@@ -204,3 +204,14 @@ pg_dump plankan > .backups/plankan-YYYYMMDD-HHMMSS.sql
 ```
 
 Folder `.backups/` sudah ter-ignore git.
+
+---
+
+## 🧠 OpenCode Skills
+
+Skills OpenCode tersimpan sebagai `SKILL.md` di:
+- `.opencode/skills/<name>/SKILL.md`
+- `.claude/skills/<name>/SKILL.md`
+- `.agents/skills/<name>/SKILL.md`
+
+Skill proyek: `plan-kan` (`.opencode/skills/plan-kan/SKILL.md`). Skill Prisma tersedia di `.agents/skills/`. Lihat `docs/opencode-skills.md`.

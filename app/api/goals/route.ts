@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { canUse } from "@/lib/entitlement";
+import { getAccessScope } from "@/lib/workspace";
 import { withMonitoring } from "@/lib/monitoring";
 import { z } from "zod";
 
@@ -38,6 +39,7 @@ const createGoalSchema = z.object({
     .optional(),
   walletId: z.string().min(1).nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Warna tidak valid").default("#10b981"),
+  workspaceId: z.string().nullable().optional(),
 });
 
 export type GoalCreateInput = z.infer<typeof createGoalSchema>;
@@ -61,8 +63,10 @@ async function GETHandler() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { or } = await getAccessScope(session.user.id);
+
     const goals = await prisma.financialGoal.findMany({
-      where: { userId: session.user.id, status: { not: "ARCHIVED" } },
+      where: { OR: or, status: { not: "ARCHIVED" } },
       include: { wallet: { select: { id: true, name: true } } },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
@@ -113,9 +117,11 @@ async function POSTHandler(request: Request) {
     const body = await request.json();
     const validated = createGoalSchema.parse(body);
 
+    const { or, workspaceIds } = await getAccessScope(session.user.id);
+
     if (validated.walletId) {
       const wallet = await prisma.wallet.findFirst({
-        where: { id: validated.walletId, userId: session.user.id },
+        where: { id: validated.walletId, OR: or },
         select: { id: true },
       });
       if (!wallet) {
@@ -123,10 +129,22 @@ async function POSTHandler(request: Request) {
       }
     }
 
+    let workspaceId: string | null = null;
+    if (validated.workspaceId) {
+      if (!workspaceIds.includes(validated.workspaceId)) {
+        return NextResponse.json({ error: "Kamu bukan member workspace tersebut" }, { status: 403 });
+      }
+      workspaceId = validated.workspaceId;
+    } else if (validated.workspaceId === undefined && workspaceIds.length > 0) {
+      // Family workspace: financial goal baru otomatis shared.
+      workspaceId = workspaceIds[0];
+    }
+
     const status = goalStatusFor(validated.currentAmount, validated.targetAmount);
     const goal = await prisma.financialGoal.create({
       data: {
         userId: session.user.id,
+        workspaceId,
         name: validated.name,
         targetAmount: validated.targetAmount,
         currentAmount: validated.currentAmount,

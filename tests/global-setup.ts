@@ -2,6 +2,9 @@ import { execSync } from "node:child_process";
 import { Pool } from "pg";
 
 const TABLES = [
+  "workspace_invitation",
+  "workspace_member",
+  "workspace",
   "session",
   "account",
   "verification",

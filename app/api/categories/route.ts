@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { ensureUserStarterData } from "@/lib/default-categories";
+import { getAccessScope } from "@/lib/workspace";
 import { z } from "zod";
 import { withMonitoring } from "@/lib/monitoring";
 
@@ -11,6 +12,7 @@ const createCategorySchema = z.object({
   parentId: z.string().nullable().optional(),
   icon: z.string().default("Tag"),
   color: z.string().default("#64748b"),
+  workspaceId: z.string().nullable().optional(),
 });
 
 async function GETHandler(request: Request) {
@@ -22,13 +24,15 @@ async function GETHandler(request: Request) {
 
     await ensureUserStarterData(session.user.id);
 
+    const { or } = await getAccessScope(session.user.id);
+
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
     const parentOnly = searchParams.get("parentOnly") === "true";
 
     const categories = await prisma.category.findMany({
       where: {
-        userId: session.user.id,
+        OR: or,
         ...(type ? { type: type as any } : {}),
         ...(parentOnly ? { parentId: null } : {}),
       },
@@ -64,11 +68,21 @@ async function POSTHandler(request: Request) {
     const body = await request.json();
     const validated = createCategorySchema.parse(body);
 
+    const { or, workspaceIds } = await getAccessScope(session.user.id);
+
+    let workspaceId: string | null = null;
+    if (validated.workspaceId) {
+      if (!workspaceIds.includes(validated.workspaceId)) {
+        return NextResponse.json({ error: "Kamu bukan member workspace tersebut" }, { status: 403 });
+      }
+      workspaceId = validated.workspaceId;
+    }
+
     let parentId = validated.parentId || null;
 
     if (parentId) {
       const parentCat = await prisma.category.findFirst({
-        where: { id: parentId, userId: session.user.id },
+        where: { id: parentId, OR: or },
       });
       if (!parentCat) {
         return NextResponse.json({ error: "Parent kategori tidak valid" }, { status: 400 });
@@ -81,6 +95,7 @@ async function POSTHandler(request: Request) {
     const category = await prisma.category.create({
       data: {
         userId: session.user.id,
+        workspaceId,
         parentId,
         name: validated.name,
         type: validated.type,

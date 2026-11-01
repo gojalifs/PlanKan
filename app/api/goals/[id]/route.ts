@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth-server";
 import { canUse } from "@/lib/entitlement";
+import { getAccessScope } from "@/lib/workspace";
 import { withMonitoring } from "@/lib/monitoring";
 import { z } from "zod";
 import { GOAL_FEATURE, goalNotEntitledBody, goalStatusFor, serializeGoal } from "../route";
@@ -55,8 +56,9 @@ async function PUTHandler(
     const body = await request.json().catch(() => ({}));
     const validated = updateGoalSchema.parse(body);
 
+    const { or } = await getAccessScope(session.user.id);
     const existing = await prisma.financialGoal.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, OR: or },
     });
     if (!existing) {
       return NextResponse.json({ error: "Tujuan tidak ditemukan" }, { status: 404 });
@@ -64,7 +66,7 @@ async function PUTHandler(
 
     if (validated.walletId !== undefined && validated.walletId !== null) {
       const wallet = await prisma.wallet.findFirst({
-        where: { id: validated.walletId, userId: session.user.id },
+        where: { id: validated.walletId, OR: or },
         select: { id: true },
       });
       if (!wallet) {
@@ -115,8 +117,9 @@ async function DELETEHandler(
     }
 
     const { id } = await params;
+    const { or } = await getAccessScope(session.user.id);
     const existing = await prisma.financialGoal.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, OR: or },
     });
     if (!existing) {
       return NextResponse.json({ error: "Tujuan tidak ditemukan" }, { status: 404 });

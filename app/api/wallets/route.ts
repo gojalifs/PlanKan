@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "@/lib/auth-server";
+import { ensureUserStarterData } from "@/lib/default-categories";
 import { getLimit } from "@/lib/entitlement";
+import { getAccessibleWorkspaceIds } from "@/lib/workspace";
+import { z } from "zod";
 import { withMonitoring } from "@/lib/monitoring";
 
 const createWalletSchema = z.object({
@@ -12,31 +15,33 @@ const createWalletSchema = z.object({
   color: z.string().default("#0ea5e9"),
   icon: z.string().default("Wallet"),
   isExcludedFromTotal: z.boolean().default(false),
+  workspaceId: z.string().nullable().optional(),
 });
 
-async function GETHandler(req: NextRequest) {
+async function GETHandler() {
   try {
-    const session = await auth.api.getSession({
-      headers: await new Headers({ "Authorization": req.headers.get("authorization") || "" }),
-    });
-
-    if (!session?.user?.id) {
+    const session = await getServerSession();
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userWorkspaces = await prisma.workspaceMember.findMany({
-      where: { userId: session.user.id, status: "ACTIVE" },
-      select: { workspaceId: true },
-    });
+    await ensureUserStarterData(session.user.id);
+
+    const workspaceIds = await getAccessibleWorkspaceIds(session.user.id);
 
     const wallets = await prisma.wallet.findMany({
       where: {
         OR: [
           { userId: session.user.id, workspaceId: null },
-          { workspaceId: { in: userWorkspaces.map(m => m.workspaceId) } }
-        ]
+          ...(workspaceIds.length > 0 ? [{ workspaceId: { in: workspaceIds } }] : []),
+        ],
       },
       orderBy: { createdAt: "asc" },
+      include: {
+        _count: {
+          select: { transactions: true, transfersIn: true },
+        },
+      },
     });
 
     const totalBalance = wallets
@@ -51,30 +56,44 @@ async function GETHandler(req: NextRequest) {
   }
 }
 
-async function POSTHandler(req: NextRequest) {
+async function POSTHandler(request: Request) {
   try {
-    const session = await auth.api.getSession({
-      headers: await new Headers({ "Authorization": req.headers.get("authorization") || "" }),
-    });
-
-    if (!session?.user?.id) {
+    const session = await getServerSession();
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
+    const body = await request.json();
     const validated = createWalletSchema.parse(body);
-    const workspaceId = validated.workspaceId || null;
 
-    // Enforce the plan's wallet count limit
+    const workspaceIds = await getAccessibleWorkspaceIds(session.user.id);
+
+    // Kalau workspaceId dikirim, user wajib member workspace tsb. Kalau tidak,
+    // wallet jadi personal (workspaceId = null).
+    let workspaceId: string | null = null;
+    if (validated.workspaceId) {
+      if (!workspaceIds.includes(validated.workspaceId)) {
+        return NextResponse.json(
+          { error: "Kamu bukan member workspace tersebut" },
+          { status: 403 }
+        );
+      }
+      workspaceId = validated.workspaceId;
+    } else if (validated.workspaceId === undefined && workspaceIds.length > 0) {
+      // Family workspace: wallet baru otomatis shared ke workspace.
+      workspaceId = workspaceIds[0];
+    }
+
+    // Enforce the plan's wallet count limit (wallet.limit; null == unlimited).
     const walletLimit = await getLimit(session.user.id, "wallet.limit");
     if (walletLimit !== null) {
       const count = await prisma.wallet.count({
         where: {
           OR: [
             { userId: session.user.id, workspaceId: null },
-            { workspaceId: { in: userWorkspaces.map(m => m.workspaceId) } }
-          ]
-        }
+            ...(workspaceIds.length > 0 ? [{ workspaceId: { in: workspaceIds } }] : []),
+          ],
+        },
       });
       if (count >= walletLimit) {
         return NextResponse.json(

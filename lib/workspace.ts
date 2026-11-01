@@ -56,8 +56,17 @@ export async function createWorkspace(ownerId: string, name: string) {
     },
   });
 
-  await prisma.workspaceMember.create({
-    data: {
+  // Upsert: user mungkin pernah jadi member workspace lain lalu keluar
+  // (row berstatus REMOVED tetap menyimpan unique userId).
+  await prisma.workspaceMember.upsert({
+    where: { userId: ownerId },
+    update: {
+      workspaceId: workspace.id,
+      role: "OWNER",
+      status: "ACTIVE",
+      joinedAt: new Date(),
+    },
+    create: {
       workspaceId: workspace.id,
       userId: ownerId,
       role: "OWNER",
@@ -67,6 +76,7 @@ export async function createWorkspace(ownerId: string, name: string) {
   const activeSub = await prisma.subscription.findFirst({
     where: {
       userId: ownerId,
+      workspaceId: null,
       status: { in: ["TRIALING", "ACTIVE", "PAST_DUE"] },
     },
   });
@@ -126,6 +136,11 @@ export async function updateWorkspace(id: string, data: { name?: string }) {
 }
 
 export async function deleteWorkspace(id: string) {
+  // Jangan hapus riwayat subscription karena cascade: lepas ke personal dulu.
+  await prisma.subscription.updateMany({
+    where: { workspaceId: id },
+    data: { workspaceId: null },
+  });
   return prisma.workspace.delete({ where: { id } });
 }
 
@@ -146,7 +161,7 @@ export async function inviteMember(workspaceId: string, email: string) {
   const existingMember = await prisma.workspaceMember.findFirst({
     where: {
       workspaceId,
-      user: { email },
+      user: { email: { equals: email, mode: "insensitive" } },
       status: "ACTIVE",
     },
   });
@@ -158,7 +173,7 @@ export async function inviteMember(workspaceId: string, email: string) {
   const existingInvitation = await prisma.workspaceInvitation.findFirst({
     where: {
       workspaceId,
-      email,
+      email: { equals: email, mode: "insensitive" },
       status: "PENDING",
       expiresAt: { gt: new Date() },
     },
@@ -195,15 +210,15 @@ export async function acceptInvitation(token: string, userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new Error("User tidak ditemukan");
 
-  if (user.email !== invitation.email) {
+  if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
     throw new Error("Email tidak cocok dengan invitation");
   }
 
   const existingMembership = await prisma.workspaceMember.findFirst({
-    where: { userId, status: "ACTIVE" },
+    where: { userId },
   });
 
-  if (existingMembership) {
+  if (existingMembership?.status === "ACTIVE") {
     throw new Error("Kamu sudah menjadi member workspace lain");
   }
 
@@ -219,13 +234,23 @@ export async function acceptInvitation(token: string, userId: string) {
   }
 
   const [membership] = await prisma.$transaction([
-    prisma.workspaceMember.create({
-      data: {
-        workspaceId: invitation.workspaceId,
-        userId,
-        role: "MEMBER",
-      },
-    }),
+    existingMembership
+      ? prisma.workspaceMember.update({
+          where: { id: existingMembership.id },
+          data: {
+            workspaceId: invitation.workspaceId,
+            role: "MEMBER",
+            status: "ACTIVE",
+            joinedAt: new Date(),
+          },
+        })
+      : prisma.workspaceMember.create({
+          data: {
+            workspaceId: invitation.workspaceId,
+            userId,
+            role: "MEMBER",
+          },
+        }),
     prisma.workspaceInvitation.update({
       where: { id: invitation.id },
       data: { status: "ACCEPTED" },
@@ -275,8 +300,17 @@ export async function leaveWorkspace(userId: string) {
       (m) => m.userId !== userId && m.status === "ACTIVE"
     );
     if (otherMembers.length > 0) {
-      throw new Error("Owner tidak bisa leave jika masih ada member lain. Transfer ownership atau hapus semua member terlebih dahulu.");
+      throw new Error("Owner tidak bisa leave jika masih ada member lain. Hapus semua member terlebih dahulu.");
     }
+
+    // Owner sendirian: keluar berarti workspace dihapus (subscription dilepas
+    // ke personal agar tidak ikut terhapus oleh cascade).
+    await prisma.subscription.updateMany({
+      where: { workspaceId: membership.workspaceId },
+      data: { workspaceId: null },
+    });
+    await prisma.workspace.delete({ where: { id: membership.workspaceId } });
+    return { deleted: true };
   }
 
   return prisma.workspaceMember.update({
@@ -323,6 +357,24 @@ export async function getAccessibleWorkspaceIds(userId: string): Promise<string[
     select: { workspaceId: true },
   });
   return memberships.map((m) => m.workspaceId);
+}
+
+/**
+ * Scope filter for resources visible to a user: their own personal resources
+ * (workspaceId = null) plus every workspace they belong to. Use on models that
+ * carry `userId` + `workspaceId` (wallet, transaction, budget, category, goal).
+ */
+export type AccessCondition =
+  | { userId: string; workspaceId: null }
+  | { workspaceId: { in: string[] } };
+
+export async function getAccessScope(userId: string) {
+  const workspaceIds = await getAccessibleWorkspaceIds(userId);
+  const or: AccessCondition[] = [{ userId, workspaceId: null }];
+  if (workspaceIds.length > 0) {
+    or.push({ workspaceId: { in: workspaceIds } });
+  }
+  return { workspaceIds, or };
 }
 
 export async function getInvitationByToken(

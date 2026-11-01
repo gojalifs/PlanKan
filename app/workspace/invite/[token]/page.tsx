@@ -71,7 +71,7 @@ export default async function InvitationPage({
     );
   }
 
-  if (session.user.email !== invitation.email) {
+  if (session.user.email.toLowerCase() !== invitation.email.toLowerCase()) {
     return (
       <div className="container mx-auto max-w-md px-4 py-8">
         <Card>

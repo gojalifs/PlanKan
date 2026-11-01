@@ -22,17 +22,43 @@ export interface CurrentPlan {
 /**
  * The user's effective plan: the newest subscription still inside its billing
  * period, otherwise FREE. Derived at request time — no scheduled job needed.
+ *
+ * Workspace-aware (Family plan): a member inherits the subscription owned by
+ * their workspace. If the workspace has no active subscription yet, we fall
+ * back to the user's own personal subscription.
  */
 export async function currentPlan(userId: string): Promise<CurrentPlan> {
-  const sub = await prisma.subscription.findFirst({
-    where: {
-      userId,
-      status: { in: [...ACTIVE_LIFECYCLE] },
-      currentPeriodEnd: { gt: new Date() },
-    },
-    include: { plan: true },
-    orderBy: { currentPeriodEnd: "desc" },
+  const membership = await prisma.workspaceMember.findFirst({
+    where: { userId, status: "ACTIVE" },
+    select: { workspaceId: true },
   });
+
+  const now = new Date();
+
+  let sub = membership
+    ? await prisma.subscription.findFirst({
+        where: {
+          workspaceId: membership.workspaceId,
+          status: { in: [...ACTIVE_LIFECYCLE] },
+          currentPeriodEnd: { gt: now },
+        },
+        include: { plan: true },
+        orderBy: { currentPeriodEnd: "desc" },
+      })
+    : null;
+
+  if (!sub) {
+    sub = await prisma.subscription.findFirst({
+      where: {
+        userId,
+        workspaceId: null,
+        status: { in: [...ACTIVE_LIFECYCLE] },
+        currentPeriodEnd: { gt: now },
+      },
+      include: { plan: true },
+      orderBy: { currentPeriodEnd: "desc" },
+    });
+  }
 
   if (!sub) {
     return { planKey: "FREE", plan: null, subscription: null };
@@ -77,8 +103,21 @@ export async function grantSubscription(
   const plan = await prisma.plan.findUnique({ where: { key: planKey } });
   if (!plan) throw new Error(`Plan "${planKey}" tidak ditemukan. Seed plans dulu.`);
 
+  // Family plan: subscription mengikuti workspace tempat user bergabung.
+  const membership = await prisma.workspaceMember.findFirst({
+    where: { userId, status: "ACTIVE" },
+    select: { workspaceId: true },
+  });
+  const workspaceId = membership?.workspaceId ?? null;
+
   await prisma.subscription.updateMany({
-    where: { userId, status: { in: [...ACTIVE_LIFECYCLE] } },
+    where: {
+      OR: [
+        { userId, workspaceId: null },
+        ...(workspaceId ? [{ workspaceId }] : []),
+      ],
+      status: { in: [...ACTIVE_LIFECYCLE] },
+    },
     data: { status: "CANCELLED" },
   });
 
@@ -90,6 +129,7 @@ export async function grantSubscription(
   return prisma.subscription.create({
     data: {
       userId,
+      workspaceId,
       planId: plan.id,
       status: (opts.status ?? "ACTIVE") as SubscriptionStatus,
       currentPeriodStart: now,

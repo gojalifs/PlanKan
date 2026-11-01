@@ -49,7 +49,13 @@ export function InviteMemberDialog({
         return;
       }
 
-      toast.success(`Invitation terkirim ke ${email.trim()}`);
+      if (data.email?.sent) {
+        toast.success(`Invitation terkirim ke ${email.trim()}`);
+      } else {
+        toast.warning(
+          `Invitation dibuat, tapi email gagal (${data.email?.reason || "unknown"}). Salin link dari daftar invitation.`
+        );
+      }
       setOpen(false);
       setEmail("");
       router.refresh();
