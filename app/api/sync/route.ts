@@ -57,13 +57,26 @@ async function GETHandler(request: Request) {
       include: { _count: { select: { transactions: true, transfersIn: true } } },
     });
 
+    const deletions = await prisma.syncDeletion.findMany({
+      where: {
+        deletedAt: { gte: since },
+        OR: [
+          { userId: session.user.id },
+          ...(workspaceIds.length > 0 ? [{ workspaceId: { in: workspaceIds } }] : []),
+        ],
+      },
+      orderBy: { deletedAt: "asc" },
+      take: limit,
+    });
+
     const serverTime = new Date().toISOString();
 
     const hasMore =
       transactions.length >= limit ||
       walletsScoped.length >= limit ||
       categories.length >= limit ||
-      budgets.length >= limit;
+      budgets.length >= limit ||
+      deletions.length >= limit;
 
     return NextResponse.json({
       serverTime,
@@ -73,6 +86,7 @@ async function GETHandler(request: Request) {
       wallets: walletsScoped,
       categories,
       budgets,
+      deletions,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Internal Server Error";

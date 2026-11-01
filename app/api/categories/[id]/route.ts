@@ -96,6 +96,15 @@ async function DELETEHandler(
       where: { id },
     });
 
+    await prisma.syncDeletion.create({
+      data: {
+        entityType: "category",
+        entityId: id,
+        userId: session.user.id,
+        workspaceId: existing.workspaceId,
+      },
+    });
+
     return NextResponse.json({ success: true, message: "Kategori berhasil dihapus" });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });

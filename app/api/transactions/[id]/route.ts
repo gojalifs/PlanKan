@@ -287,6 +287,15 @@ async function DELETEHandler(
       await tx.transaction.delete({
         where: { id },
       });
+
+      await tx.syncDeletion.create({
+        data: {
+          entityType: "transaction",
+          entityId: id,
+          userId: session.user.id,
+          workspaceId: existing.workspaceId,
+        },
+      });
     });
 
     return NextResponse.json({ success: true, message: "Transaksi berhasil dihapus" });

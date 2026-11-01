@@ -37,6 +37,15 @@ async function DELETEHandler(
       where: { id },
     });
 
+    await prisma.syncDeletion.create({
+      data: {
+        entityType: "budget",
+        entityId: id,
+        userId: session.user.id,
+        workspaceId: existingBudget.workspaceId,
+      },
+    });
+
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error: any) {
     console.error("DELETE /api/budgets/[id] error:", error);

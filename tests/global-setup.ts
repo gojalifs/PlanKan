@@ -25,6 +25,7 @@ const TABLES = [
   "gemini_call_log",
   "user",
   "device_token",
+  "sync_deletion",
 ];
 
 export default async function setup() {

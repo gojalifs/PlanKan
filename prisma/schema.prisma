@@ -535,3 +535,16 @@ model DeviceToken {
   @@index([userId])
   @@map("device_token")
 }
+
+model SyncDeletion {
+  id          String   @id @default(cuid())
+  entityType  String
+  entityId    String
+  userId      String?
+  workspaceId String?
+  deletedAt   DateTime @default(now())
+
+  @@index([deletedAt])
+  @@index([entityType, entityId])
+  @@map("sync_deletion")
+}
