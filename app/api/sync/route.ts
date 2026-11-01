@@ -59,9 +59,16 @@ async function GETHandler(request: Request) {
 
     const serverTime = new Date().toISOString();
 
+    const hasMore =
+      transactions.length >= limit ||
+      walletsScoped.length >= limit ||
+      categories.length >= limit ||
+      budgets.length >= limit;
+
     return NextResponse.json({
       serverTime,
       since: since.toISOString(),
+      hasMore,
       transactions,
       wallets: walletsScoped,
       categories,
