@@ -16,6 +16,7 @@ const createWalletSchema = z.object({
   icon: z.string().default("Wallet"),
   isExcludedFromTotal: z.boolean().default(false),
   workspaceId: z.string().nullable().optional(),
+  idempotencyKey: z.string().optional().nullable(),
 });
 
 async function GETHandler() {
@@ -65,6 +66,18 @@ async function POSTHandler(request: Request) {
 
     const body = await request.json();
     const validated = createWalletSchema.parse(body);
+
+    const idempotencyKey =
+      validated.idempotencyKey || request.headers.get("idempotency-key");
+
+    if (idempotencyKey) {
+      const existing = await prisma.wallet.findFirst({
+        where: { userId: session.user.id, idempotencyKey },
+      });
+      if (existing) {
+        return NextResponse.json({ wallet: existing, alreadySaved: true }, { status: 200 });
+      }
+    }
 
     const workspaceIds = await getAccessibleWorkspaceIds(session.user.id);
 
@@ -118,6 +131,7 @@ async function POSTHandler(request: Request) {
         color: validated.color,
         icon: validated.icon,
         isExcludedFromTotal: validated.isExcludedFromTotal,
+        idempotencyKey: idempotencyKey || null,
       },
     });
 

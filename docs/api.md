@@ -111,3 +111,22 @@ Semua endpoint berada di bawah `/api`, kecuali route khusus yang disebutkan. Ses
 | POST | `/api/workspaces/[id]/leave` | Keluar workspace |
 | GET/POST/DELETE | `/api/workspace/invitations/[token]` | Detail/terima/tolak undangan |
 EOF
+## Mobile (REST API)
+
+- Semua endpoint di atas tersedia juga di prefix `/api/v1/*` (alias rewrite).
+- Mobile mengirim `Authorization: Bearer <token>` (Better Auth bearer plugin).
+- Login/register mengembalikan header `set-auth-token` yang disimpan client.
+- CORS diaktifkan untuk origin pada `MOBILE_ALLOWED_ORIGINS`.
+- Lampiran transaksi: `GET /api/v1/transactions/[id]/attachment` mengembalikan `{ url }` (path same-origin `/transactions/<object>`).
+- Preflight `OPTIONS` ditangani oleh `proxy.ts`.
+
+## Sync (Mobile Offline)
+
+- `GET /api/v1/sync?since=<ISO>&limit=500` — perubahan transaksi, dompet, kategori, budget sejak `since`.
+- Response: `{ serverTime, since, transactions, wallets, categories, budgets }`.
+- Gunakan `serverTime` sebagai `since` berikutnya untuk delta sync.
+
+## Devices (Push Token)
+
+- `POST /api/v1/devices` — body `{ platform, token }`.
+- `DELETE /api/v1/devices?token=...` — hapus token.

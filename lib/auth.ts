@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { bearer } from "better-auth/plugins";
 import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
 
@@ -89,11 +90,16 @@ export const auth = betterAuth({
   },
   secret: process.env.BETTER_AUTH_SECRET || "plankan-super-secret-key-32-chars-long-at-least!",
   baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "https://budget.twogether.click",
+  plugins: [bearer()],
   trustedOrigins: [
     "https://budget.twogether.click",
     "http://localhost:3000",
     process.env.BETTER_AUTH_URL || "",
     process.env.NEXT_PUBLIC_APP_URL || "",
+    ...(process.env.MOBILE_ALLOWED_ORIGINS || "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
   ].filter(Boolean),
 });
 
