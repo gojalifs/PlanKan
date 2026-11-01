@@ -25,6 +25,11 @@ const rateLimitBuckets = new Map<string, { count: number; reset: number }>();
 
 function checkRateLimit(key: string, limit: number, windowMs: number): { allowed: boolean; remaining: number; reset: number } {
   const now = Date.now();
+  if (rateLimitBuckets.size > 10000) {
+    for (const [k, v] of rateLimitBuckets) {
+      if (v.reset <= now) rateLimitBuckets.delete(k);
+    }
+  }
   const bucket = rateLimitBuckets.get(key);
   if (!bucket || bucket.reset <= now) {
     rateLimitBuckets.set(key, { count: 1, reset: now + windowMs });
