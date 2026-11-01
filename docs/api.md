@@ -134,3 +134,7 @@ EOF
 ## Me
 
 - `GET /api/v1/me` — profil user dari session.
+
+## Health
+
+- `GET /api/v1/health` — status aplikasi.
