@@ -1,10 +1,11 @@
 openapi: 3.0.3
 info:
-  title: PlanKan Mobile REST API
+  title: PlanKan REST API
   version: 1.0.0
-  description: REST API untuk aplikasi mobile PlanKan (alias /api/v1 dari /api).
+  description: REST API untuk web dan mobile PlanKan. Mobile memakai prefix /api/v1 dan Bearer token.
 servers:
   - url: https://budget.twogether.click/api/v1
+  - url: http://localhost:3000/api/v1
 components:
   securitySchemes:
     bearerAuth:
@@ -16,46 +17,596 @@ components:
       properties:
         error:
           type: string
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        emailVerified: { type: boolean }
+        image: { type: string, nullable: true }
+    Wallet:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string }
+        balance: { type: number }
+        currency: { type: string }
+        color: { type: string }
+        icon: { type: string }
+        isExcludedFromTotal: { type: boolean }
+        workspaceId: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    Category:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [INCOME, EXPENSE] }
+        parentId: { type: string, nullable: true }
+        icon: { type: string }
+        color: { type: string }
+        isDefault: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    Transaction:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [INCOME, EXPENSE, TRANSFER] }
+        amount: { type: number }
+        date: { type: string, format: date-time }
+        note: { type: string, nullable: true }
+        attachmentUrl: { type: string, nullable: true }
+        walletId: { type: string }
+        destinationWalletId: { type: string, nullable: true }
+        categoryId: { type: string, nullable: true }
+        isAnomaly: { type: boolean }
+        anomalyReason: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    Budget:
+      type: object
+      properties:
+        id: { type: string }
+        categoryId: { type: string }
+        amount: { type: number }
+        period: { type: string }
+        month: { type: integer, nullable: true }
+        year: { type: integer, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    Device:
+      type: object
+      properties:
+        id: { type: string }
+        platform: { type: string, enum: [android, ios, web] }
+        token: { type: string }
+        lastSeenAt: { type: string, format: date-time }
+    SyncDeletion:
+      type: object
+      properties:
+        entityType: { type: string }
+        entityId: { type: string }
+        deletedAt: { type: string, format: date-time }
 security:
   - bearerAuth: []
 paths:
-  /auth/...:
-    description: Better Auth catch-all (register, login, verify, reset, logout).
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+  /me:
+    get:
+      summary: Profil user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
   /wallets:
     get:
       summary: List dompet
+      responses:
+        "200":
+          description: OK
     post:
-      summary: Buat dompet (idempotency via Idempotency-Key)
-  /transactions:
+      summary: Buat dompet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                type: { type: string }
+                balance: { type: number }
+                currency: { type: string }
+                color: { type: string }
+                icon: { type: string }
+                isExcludedFromTotal: { type: boolean }
+                workspaceId: { type: string, nullable: true }
+                idempotencyKey: { type: string }
+      responses:
+        "201": { description: Created }
+  /wallets/{id}:
     get:
-      summary: List transaksi + summary
-    post:
-      summary: Buat transaksi (idempotencyKey di body)
-  /transactions/{id}:
-    get:
-      summary: Detail transaksi
+      summary: Detail dompet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
     put:
-      summary: Update transaksi (409 jika konflik)
+      summary: Update dompet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "409": { description: Conflict }
     delete:
-      summary: Hapus transaksi
-  /transactions/{id}/attachment:
-    get:
-      summary: URL lampiran same-origin
-  /budgets:
-    get:
-      summary: Progress budget
+      summary: Hapus dompet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /wallets/batch:
     post:
-      summary: Upsert budget
+      summary: Buat hingga 20 dompet
+      responses:
+        "201": { description: Created }
   /categories:
     get:
       summary: List kategori
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [INCOME, EXPENSE] }
+        - name: parentOnly
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200": { description: OK }
     post:
       summary: Buat kategori
+      responses:
+        "201": { description: Created }
+  /categories/{id}:
+    put:
+      summary: Update kategori
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "409": { description: Conflict }
+    delete:
+      summary: Hapus kategori
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /transactions:
+    get:
+      summary: List transaksi + summary
+      parameters:
+        - name: walletId
+          in: query
+          schema: { type: string }
+        - name: categoryId
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { type: string, enum: [INCOME, EXPENSE, TRANSFER] }
+        - name: startDate
+          in: query
+          schema: { type: string, format: date }
+        - name: endDate
+          in: query
+          schema: { type: string, format: date }
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: offset
+          in: query
+          schema: { type: integer }
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Buat transaksi (JSON atau multipart)
+      responses:
+        "201": { description: Created }
+  /transactions/{id}:
+    get:
+      summary: Detail transaksi
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    put:
+      summary: Update transaksi
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "409": { description: Conflict }
+    delete:
+      summary: Hapus transaksi
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /transactions/{id}/attachment:
+    get:
+      summary: URL lampiran same-origin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string }
+  /budgets:
+    get:
+      summary: Progress budget
+      parameters:
+        - name: month
+          in: query
+          schema: { type: integer }
+        - name: year
+          in: query
+          schema: { type: integer }
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Upsert budget
+      responses:
+        "200": { description: OK }
+        "409": { description: Conflict }
+  /budgets/{id}:
+    delete:
+      summary: Hapus budget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /budget-period/setting:
+    get:
+      summary: Setting periode global
+      responses:
+        "200": { description: OK }
+    put:
+      summary: Update setting periode global
+      responses:
+        "200": { description: OK }
+  /budget-period/overrides:
+    get:
+      summary: Override per bulan
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Buat override
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Hapus override
+      responses:
+        "200": { description: OK }
+  /receipts:
+    post:
+      summary: Upload gambar struk + OCR
+      responses:
+        "200": { description: OK }
+  /receipts/{id}:
+    get:
+      summary: Ambil gambar struk
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Hapus gambar struk
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /reports:
+    get:
+      summary: Tren, breakdown, daily expense, top subkategori
+      responses:
+        "200": { description: OK }
+  /summary:
+    get:
+      summary: Net worth, cashflow, transaksi terbaru, anomali
+      responses:
+        "200": { description: OK }
+  /monthly-review:
+    get:
+      summary: Ringkasan AI bulanan
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Generate ringkasan AI bulanan
+      responses:
+        "200": { description: OK }
+  /voice:
+    post:
+      summary: Parse teks menjadi draft transaksi
+      responses:
+        "200": { description: OK }
+  /goals:
+    get:
+      summary: List goal
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Buat goal
+      responses:
+        "201": { description: Created }
+  /goals/{id}:
+    put:
+      summary: Update goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Hapus goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /me/usage:
+    get:
+      summary: Plan, entitlement, usage
+      responses:
+        "200": { description: OK }
+  /workspaces:
+    get:
+      summary: List workspace
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Buat workspace
+      responses:
+        "201": { description: Created }
+  /workspaces/{id}:
+    get:
+      summary: Detail workspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    patch:
+      summary: Update workspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Hapus workspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /workspaces/{id}/invitations:
+    get:
+      summary: Kelola undangan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Buat undangan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201": { description: Created }
+    delete:
+      summary: Hapus undangan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /workspaces/{id}/members:
+    get:
+      summary: List member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Hapus member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /workspaces/{id}/leave:
+    post:
+      summary: Keluar workspace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /workspace/invitations/{token}:
+    get:
+      summary: Detail undangan
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Terima undangan
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Tolak undangan
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
   /sync:
     get:
-      summary: Delta sync (since, limit)
+      summary: Delta sync
+      parameters:
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        "200": { description: OK }
   /devices:
     post:
       summary: Register push token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, token]
+              properties:
+                platform: { type: string, enum: [android, ios, web] }
+                token: { type: string }
+      responses:
+        "201": { description: Created }
     delete:
       summary: Hapus push token
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /admin/subscriptions:
+    get:
+      summary: List subscription (billing admin)
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Grant subscription (billing admin)
+      responses:
+        "200": { description: OK }
+  /admin/subscriptions/{id}:
+    delete:
+      summary: Cancel subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /monitoring/overview:
+    get:
+      summary: Statistik 7 hari (owner-gated)
+      responses:
+        "200": { description: OK }
+  /monitoring/ai:
+    get:
+      summary: Rollup Gemini harian (owner-gated)
+      responses:
+        "200": { description: OK }
+  /monitoring/requests:
+    get:
+      summary: p95/p99 per route (owner-gated)
+      responses:
+        "200": { description: OK }
+  /monitoring/access:
+    get:
+      summary: Gate akses client
+      responses:
+        "200": { description: OK }
