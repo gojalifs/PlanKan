@@ -51,3 +51,18 @@ Jika `updatedAt` server lebih baru dari client, response 409 berisi state server
 ```
 
 Kode umum: 401 (unauthorized), 409 (conflict/limit), 429 (rate limit).
+
+## Login Google Native (Android/iOS)
+
+1. Gunakan Google Sign-In SDK native untuk mendapatkan `idToken`.
+2. Kirim ke Better Auth:
+   ```json
+   POST /api/v1/auth/sign-in/social
+   {
+     "provider": "google",
+     "idToken": { "token": "<google id token>" },
+     "disableRedirect": true
+   }
+   ```
+3. Ambil `set-auth-token` dari response header, simpan di secure storage.
+4. Tambahkan `GOOGLE_ANDROID_CLIENT_ID` / `GOOGLE_IOS_CLIENT_ID` di server env.
